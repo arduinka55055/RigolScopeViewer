@@ -18,7 +18,7 @@ public class BinningBenchmark
     // Оголошуємо обидва рушії
     private DpoBinningEngine _sequentialEngine;
     private DpoBinningEnginePLINQ _plinqEngine;
-    private DpoBinningEngineGPU _computeEngine;
+    //private DpoBinningEngineGPU _computeEngine;
 
     [Params(100_000, 1_000_000, 10_000_000)]
     public int PointCount { get; set; }
@@ -29,7 +29,7 @@ public class BinningBenchmark
         // Ініціалізуємо обидва рушії (без логерів)
         _sequentialEngine = new DpoBinningEngine(null);
         _plinqEngine = new DpoBinningEnginePLINQ(null);
-        _computeEngine = new DpoBinningEngineGPU();
+        //_computeEngine = new DpoBinningEngineGPU();
 
         _sourceVoltages = new float[PointCount];
         var rand = new Random(42);
@@ -73,7 +73,7 @@ public class BinningBenchmark
             _destinationBins.AsSpan(),
             default);
     }
-
+/*
 
     [Benchmark]
     public void GpuComputeBinning()
@@ -84,7 +84,7 @@ public class BinningBenchmark
             _timeRange,
             _destinationBins.AsSpan(),
             default);
-    }
+    }*/
 
 }
 
