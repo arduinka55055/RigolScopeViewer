@@ -1,0 +1,126 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:RigolScopeViewer.ViewModels"
+        xmlns:local="using:RigolScopeViewer"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+        x:Class="RigolScopeViewer.MainWindow"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Rigol Oscilloscope Viewer">
+
+  <Design.DataContext>
+    <vm:MainViewModel />
+  </Design.DataContext>
+
+  <DockPanel LastChildFill="True">
+
+    <!-- Menu -->
+    <Menu DockPanel.Dock="Top">
+      <MenuItem Header="File">
+        <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
+        <Separator />
+        <MenuItem Header="Exit"/>
+      </MenuItem>
+      <MenuItem Header="View">
+        <MenuItem Header="Zoom In" Command="{Binding ZoomInCommand}"/>
+        <MenuItem Header="Zoom Out" Command="{Binding ZoomOutCommand}"/>
+      </MenuItem>
+    </Menu>
+
+    <!-- Toolbar -->
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Height="40" Background="#333">
+      <Button Content="Open" Command="{Binding OpenCommand}" Margin="5"/>
+      <Separator Margin="5,0" Background="#666" Width="1"/>
+      <TextBlock Text="Time/div:" VerticalAlignment="Center" Margin="5,0,0,0" Foreground="White"/>
+      <TextBox Text="{Binding TimePerDivision}" Width="60" Margin="5,0,5,0"/>
+      <TextBlock Text="s" VerticalAlignment="Center" Foreground="White"/>
+
+      <TextBlock Text="Offset:" VerticalAlignment="Center" Margin="15,0,0,0" Foreground="White"/>
+      <TextBox Text="{Binding TimeOffset}" Width="60" Margin="5,0,5,0"/>
+      <TextBlock Text="s" VerticalAlignment="Center" Foreground="White"/>
+
+      <TextBlock Text="Trigger:" VerticalAlignment="Center" Margin="15,0,0,0" Foreground="White"/>
+      <TextBox Text="{Binding TriggerLevel}" Width="60" Margin="5,0,5,0"/>
+      <TextBlock Text="V" VerticalAlignment="Center" Foreground="White"/>
+      <CheckBox Content="Show" IsChecked="{Binding ShowTrigger}" Margin="5,0,5,0" VerticalAlignment="Center"/>
+
+      <local:UnitNumericUpDown VerticalAlignment="Center" Margin="15,0,0,0" Foreground="White"
+        BaseValue="{Binding TimePerDivision}"
+        UnitSymbol="s"
+        />
+      <local:UnitNumericUpDown VerticalAlignment="Center" Margin="15,0,0,0" Foreground="White"
+        BaseValue="{Binding TimeOffset}"
+        UnitSymbol="s"
+        />
+      
+    </StackPanel>
+
+
+    <!-- Status Bar -->
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Height="25" Background="#333">
+      <TextBlock Text="Ready" VerticalAlignment="Center" Foreground="White"/>
+      <TextBlock Text=" | " VerticalAlignment="Center" Foreground="White"/>
+      <TextBlock Text="{Binding TimePerDivision, StringFormat='Time/div: {0:F6} s'}"
+                 VerticalAlignment="Center" Foreground="White"/>
+      <TextBlock Text=" | " VerticalAlignment="Center" Foreground="White"/>
+      <TextBlock Text="{Binding TimeOffset, StringFormat='Offset: {0:F6} s'}"
+                 VerticalAlignment="Center" Foreground="White"/>
+    </StackPanel>
+    
+    <!-- Main Content -->
+    <Grid Background="LightGray">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="250"/>
+      </Grid.ColumnDefinitions>
+
+      <!-- Oscilloscope Display -->
+      <local:OscilloscopeControl x:Name="OscilloscopeView"
+                                 Grid.Column="0"
+                                 Background="LightBlue" />
+
+      <!-- Channel Controls -->
+      <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+        <ItemsControl ItemsSource="{Binding Channels}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border BorderBrush="#404040" BorderThickness="0,0,0,1" Padding="10,5">
+                <StackPanel>
+                  <CheckBox Content="{Binding Name}" IsChecked="{Binding IsVisible}"/>
+
+                  <Grid Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto"/>
+                      <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto"/>
+                      <RowDefinition Height="Auto"/>
+                      <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="Scale:" Grid.Row="0" Grid.Column="0"
+                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBox Text="{Binding Scale}" Grid.Row="0" Grid.Column="1"
+                             Width="100" HorizontalAlignment="Left"/>
+
+                    <TextBlock Text="V Offset:" Grid.Row="1" Grid.Column="0"
+                               VerticalAlignment="Center" Margin="0,5,10,0"/>
+                    <TextBox Text="{Binding VoltageOffset}" Grid.Row="1" Grid.Column="1"
+                             Width="100" HorizontalAlignment="Left" Margin="0,5,0,0"/>
+
+                    <TextBlock Text="T Offset:" Grid.Row="2" Grid.Column="0"
+                               VerticalAlignment="Center" Margin="0,5,10,0"/>
+                    <TextBox Text="{Binding TimeOffset}" Grid.Row="2" Grid.Column="1"
+                             Width="100" HorizontalAlignment="Left" Margin="0,5,0,0"/>
+                  </Grid>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Grid>
+  </DockPanel>
+</Window>
