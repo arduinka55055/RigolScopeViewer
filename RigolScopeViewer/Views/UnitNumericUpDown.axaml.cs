@@ -9,6 +9,12 @@ using System.Linq;
 
 namespace RigolScopeViewer
 {
+    public enum IncrementType
+    {
+        Logarithmic,  // 1-2-5 stepping
+        Step          // Linear stepping
+    }
+
     public partial class UnitNumericUpDown : UserControl
     {
         // Static list of SI prefixes
@@ -33,6 +39,12 @@ namespace RigolScopeViewer
         public static readonly StyledProperty<string> UnitSymbolProperty =
             AvaloniaProperty.Register<UnitNumericUpDown, string>(nameof(UnitSymbol), "V");
 
+        public static readonly StyledProperty<IncrementType> IncrementTypeProperty =
+            AvaloniaProperty.Register<UnitNumericUpDown, IncrementType>(nameof(IncrementType), IncrementType.Logarithmic);
+
+        public static readonly StyledProperty<double> StepProperty =
+            AvaloniaProperty.Register<UnitNumericUpDown, double>(nameof(Step), 1.0);
+
         private UnitPrefix _currentPrefix;
         private bool _updating;
         private bool _initialized;
@@ -48,6 +60,18 @@ namespace RigolScopeViewer
         {
             get => GetValue(UnitSymbolProperty);
             set => SetValue(UnitSymbolProperty, value);
+        }
+
+        public IncrementType IncrementType
+        {
+            get => GetValue(IncrementTypeProperty);
+            set => SetValue(IncrementTypeProperty, value);
+        }
+
+        public double Step
+        {
+            get => GetValue(StepProperty);
+            set => SetValue(StepProperty, value);
         }
 
         public UnitNumericUpDown()
@@ -155,7 +179,6 @@ namespace RigolScopeViewer
 
                 // Find the best prefix for the current base value
                 UnitPrefix bestPrefix = _currentPrefix;
-                UnitPrefix previousPrefix = _currentPrefix;
                 bool changed = false;
 
                 // Find the prefix where the normalized value is between 1 and 1000
@@ -177,7 +200,6 @@ namespace RigolScopeViewer
                 if (changed)
                 {
                     _updating = true;
-                    previousPrefix = _currentPrefix;
                     _currentPrefix = bestPrefix;
                     UnitComboBox.SelectedIndex = Prefixes.IndexOf(bestPrefix);
 
@@ -207,7 +229,18 @@ namespace RigolScopeViewer
         private void StepValue(bool up)
         {
             double currentValue = (double)(NumericBox.Value ?? 0);
-            double newValue = GetNextStepValue(currentValue, up);
+            double newValue = 0;
+
+            if (IncrementType == IncrementType.Step)
+            {
+                //todo: this idea sucks but works
+                newValue = StepLinear(currentValue * _currentPrefix.Multiplier, up) / _currentPrefix.Multiplier;
+
+            }
+            else // Logarithmic
+            {
+                newValue = StepLogarithmic(currentValue, up);
+            }
 
             _updating = true;
             NumericBox.Value = (decimal)newValue;
@@ -217,7 +250,36 @@ namespace RigolScopeViewer
             AutoConvertToAppropriatePrefix();
         }
 
-        private double GetNextStepValue(double value, bool up)
+        private double StepLinear(double currentValue, bool up)
+        {
+            double step = Step / 10;
+            if (step <= 0) step = 1; // Ensure positive step
+
+            double newValue = currentValue;
+
+            if (up)
+            {
+                newValue += step;
+            }
+            else
+            {
+                newValue -= step;
+            }
+
+            // Handle crossing zero for negative values
+            if (currentValue < 0 && up && newValue >= 0)
+            {
+                newValue = 0;
+            }
+            else if (currentValue > 0 && !up && newValue <= 0)
+            {
+                newValue = 0;
+            }
+
+            return newValue;
+        }
+
+        private double StepLogarithmic(double value, bool up)
         {
             if (value == 0) return up ? 1 : -1;
 
@@ -250,10 +312,41 @@ namespace RigolScopeViewer
                     // Handle wrap-around to smaller magnitude
                     double smallerFactor = Math.Pow(10, exponent - 1);
                     nextValue = 5 * smallerFactor;
+
+                    // Ensure we don't go below minimum
+                    if (nextValue < 1e-12) nextValue = 1e-12;
                 }
             }
 
-            return negative ? -nextValue : nextValue;
+            // Handle negative values
+            if (negative)
+            {
+                nextValue = -nextValue;
+
+                // Special case: crossing zero
+                if (up && nextValue >= 0)
+                {
+                    nextValue = 0;
+                }
+                else if (!up && nextValue > 0)
+                {
+                    nextValue = -nextValue;
+                }
+            }
+            else
+            {
+                // Special case: crossing zero
+                if (!up && nextValue <= 0)
+                {
+                    nextValue = 0;
+                }
+                else if (up && nextValue < 0)
+                {
+                    nextValue = -nextValue;
+                }
+            }
+
+            return nextValue;
         }
     }
 
