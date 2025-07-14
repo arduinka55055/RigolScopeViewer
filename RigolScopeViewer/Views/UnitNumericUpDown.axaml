@@ -4,29 +4,32 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              x:Class="RigolScopeViewer.UnitNumericUpDown">
-  <Grid ColumnDefinitions="Auto,*,Auto">
-    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2">
-      <Button Name="StepDownButton" Width="30" Click="StepDownButton_Click">
-        <PathIcon Data="M0,0 L10,0 L5,8 Z" Width="10" Height="8" />
-      </Button>
-      <Button Name="StepUpButton" Width="30" Click="StepUpButton_Click">
-        <PathIcon Data="M0,8 L10,8 L5,0 Z" Width="10" Height="8" />
-      </Button>
-    </StackPanel>
+  <Grid ColumnDefinitions="Auto,*,Auto" Width="300">
 
     <NumericUpDown Name="NumericBox"
-                   Grid.Column="1"
+                   Grid.Column="0"
+                   Width="150"
                    ShowButtonSpinner="False"
                    FormatString="F3"
                    ValueChanged="NumericBox_ValueChanged"
                    LostFocus="NumericBox_LostFocus">
       <NumericUpDown.InnerRightContent>
         <ComboBox Name="UnitComboBox"
-                  MinWidth="60"
+                  MinWidth="40"
                   VerticalAlignment="Stretch"
                   SelectionChanged="UnitComboBox_SelectionChanged"
                   PointerPressed="UnitComboBox_PointerPressed"/>
       </NumericUpDown.InnerRightContent>
     </NumericUpDown>
+    
+    
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+        <Button Name="StepDownButton" Width="20" Click="StepDownButton_Click">
+          <PathIcon Data="M0,0 L10,0 L5,8 Z" Width="10" Height="8" />
+        </Button>
+        <Button Name="StepUpButton" Width="20" Click="StepUpButton_Click">
+          <PathIcon Data="M0,8 L10,8 L5,0 Z" Width="10" Height="8" />
+        </Button>
+      </StackPanel>
   </Grid>
 </UserControl>

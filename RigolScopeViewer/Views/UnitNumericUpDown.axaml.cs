@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,12 +15,14 @@ namespace RigolScopeViewer
         private static readonly List<UnitPrefix> Prefixes = new()
         {
             new UnitPrefix("p", 1e-12),
+            new UnitPrefix("n", 1e-9),
             new UnitPrefix("μ", 1e-6),
             new UnitPrefix("m", 1e-3),
             new UnitPrefix("", 1),
             new UnitPrefix("k", 1e3),
             new UnitPrefix("M", 1e6),
-            new UnitPrefix("G", 1e9)
+            new UnitPrefix("G", 1e9),
+            new UnitPrefix("T", 1e12)
         };
 
         // Avalonia properties
@@ -35,6 +36,7 @@ namespace RigolScopeViewer
         private UnitPrefix _currentPrefix;
         private bool _updating;
         private bool _initialized;
+        private bool _autoConverting;
 
         public double BaseValue
         {
@@ -51,7 +53,7 @@ namespace RigolScopeViewer
         public UnitNumericUpDown()
         {
             InitializeComponent();
-            _currentPrefix = Prefixes[3]; // Default to no prefix
+            _currentPrefix = Prefixes[4]; // Default to no prefix (index 4)
             Loaded += OnLoaded;
         }
 
@@ -66,7 +68,6 @@ namespace RigolScopeViewer
 
         private void InitializeControl()
         {
-            // Use ItemsSource
             UnitComboBox.ItemsSource = Prefixes
                 .Select(p => $"{p.Prefix}{UnitSymbol}")
                 .ToList();
@@ -101,9 +102,8 @@ namespace RigolScopeViewer
 
         private void UpdateDisplayValue()
         {
-            if (_updating) return;
+            if (_updating || _autoConverting) return;
 
-            // Convert double to decimal for NumericUpDown
             NumericBox.Value = (decimal)(BaseValue / _currentPrefix.Multiplier);
         }
 
@@ -116,23 +116,19 @@ namespace RigolScopeViewer
 
             _updating = true;
             _currentPrefix = newPrefix;
-
-            // Convert decimal to double
             BaseValue = (double)(NumericBox.Value ?? 0) * _currentPrefix.Multiplier;
             _updating = false;
         }
 
         private void NumericBox_ValueChanged(object sender, NumericUpDownValueChangedEventArgs e)
         {
-            if (_updating) return;
+            if (_updating || _autoConverting) return;
 
             _updating = true;
-            // Convert decimal to double
             BaseValue = (double)(e.NewValue ?? 0) * _currentPrefix.Multiplier;
-
-            // Auto-switch units if needed
-            AutoConvertToAppropriatePrefix();
             _updating = false;
+
+            AutoConvertToAppropriatePrefix();
         }
 
         private void NumericBox_LostFocus(object sender, RoutedEventArgs e)
@@ -142,61 +138,67 @@ namespace RigolScopeViewer
 
         private void AutoConvertToAppropriatePrefix()
         {
-            if (_updating) return;
+            if (_updating || _autoConverting) return;
 
-            double currentValue = (double)(NumericBox.Value ?? 0);
-            double absValue = Math.Abs(currentValue);
-
-            if (absValue == 0) return;
-
-            UnitPrefix newPrefix = _currentPrefix;
-
-            // Auto-switch to appropriate prefix
-            if (absValue >= 1000)
+            _autoConverting = true;
+            try
             {
-                // Find next higher prefix
-                var currentIndex = Prefixes.IndexOf(_currentPrefix);
-                for (int i = currentIndex + 1; i < Prefixes.Count; i++)
+                double currentDisplayValue = (double)(NumericBox.Value ?? 0);
+                double baseValue = currentDisplayValue * _currentPrefix.Multiplier;
+                double absBaseValue = Math.Abs(baseValue);
+
+                if (absBaseValue == 0)
                 {
-                    var testPrefix = Prefixes[i];
-                    double testValue = absValue * (_currentPrefix.Multiplier / testPrefix.Multiplier);
-                    if (testValue < 1000)
+                    _autoConverting = false;
+                    return;
+                }
+
+                // Find the best prefix for the current base value
+                UnitPrefix bestPrefix = _currentPrefix;
+                UnitPrefix previousPrefix = _currentPrefix;
+                bool changed = false;
+
+                // Find the prefix where the normalized value is between 1 and 1000
+                foreach (var prefix in Prefixes.OrderByDescending(p => p.Multiplier))
+                {
+                    double normalizedValue = absBaseValue / prefix.Multiplier;
+
+                    if (normalizedValue >= 1 && normalizedValue < 1000)
                     {
-                        newPrefix = testPrefix;
+                        if (prefix != _currentPrefix)
+                        {
+                            bestPrefix = prefix;
+                            changed = true;
+                        }
                         break;
                     }
                 }
-            }
-            else if (absValue < 0.001)
-            {
-                // Find next lower prefix
-                var currentIndex = Prefixes.IndexOf(_currentPrefix);
-                for (int i = currentIndex - 1; i >= 0; i--)
+
+                if (changed)
                 {
-                    var testPrefix = Prefixes[i];
-                    double testValue = absValue * (_currentPrefix.Multiplier / testPrefix.Multiplier);
-                    if (testValue >= 0.001)
-                    {
-                        newPrefix = testPrefix;
-                        break;
-                    }
+                    _updating = true;
+                    previousPrefix = _currentPrefix;
+                    _currentPrefix = bestPrefix;
+                    UnitComboBox.SelectedIndex = Prefixes.IndexOf(bestPrefix);
+
+                    // Calculate new display value: baseValue / newMultiplier
+                    double newDisplayValue = baseValue / bestPrefix.Multiplier;
+                    NumericBox.Value = (decimal)newDisplayValue;
+
+                    // BaseValue remains the same (baseValue doesn't change)
+                    _updating = false;
                 }
             }
-
-            if (newPrefix != _currentPrefix)
+            finally
             {
-                _updating = true;
-                _currentPrefix = newPrefix;
-                UnitComboBox.SelectedIndex = Prefixes.IndexOf(newPrefix);
-                BaseValue = currentValue * _currentPrefix.Multiplier;
-                _updating = false;
+                _autoConverting = false;
             }
         }
 
-        // Fix focus issue when clicking on ComboBox
         private void UnitComboBox_PointerPressed(object sender, PointerPressedEventArgs e)
         {
             e.Handled = true;
+            UnitComboBox.Focus();
         }
 
         private void StepUpButton_Click(object sender, RoutedEventArgs e) => StepValue(true);
@@ -211,6 +213,8 @@ namespace RigolScopeViewer
             NumericBox.Value = (decimal)newValue;
             BaseValue = newValue * _currentPrefix.Multiplier;
             _updating = false;
+
+            AutoConvertToAppropriatePrefix();
         }
 
         private double GetNextStepValue(double value, bool up)
@@ -219,6 +223,10 @@ namespace RigolScopeViewer
 
             bool negative = value < 0;
             double absValue = Math.Abs(value);
+
+            // Handle very small values
+            if (absValue < 1e-12) return up ? 1e-12 : -1e-12;
+
             int exponent = (int)Math.Floor(Math.Log10(absValue));
             double stepFactor = Math.Pow(10, exponent);
 
@@ -237,7 +245,12 @@ namespace RigolScopeViewer
                 if (absValue > steps[2]) nextValue = steps[2];
                 else if (absValue > steps[1]) nextValue = steps[1];
                 else if (absValue > steps[0]) nextValue = steps[0];
-                else nextValue = 5 * Math.Pow(10, exponent - 1);
+                else
+                {
+                    // Handle wrap-around to smaller magnitude
+                    double smallerFactor = Math.Pow(10, exponent - 1);
+                    nextValue = 5 * smallerFactor;
+                }
             }
 
             return negative ? -nextValue : nextValue;
