@@ -103,8 +103,9 @@ public class RigolBinLoader : IWaveformLoader
             0 => Colors.Yellow,
             1 => Colors.Cyan,
             2 => Colors.Magenta,
-            3 => Colors.Lime,
-            4 => Colors.Orange,
+            3 => Colors.Blue,
+            4 => Colors.Lime,
+            5 => Colors.Orange,
             _ => Colors.White
         };
     }

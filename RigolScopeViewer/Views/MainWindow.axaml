@@ -99,23 +99,23 @@
                       <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Text="Scale:" Grid.Row="0" Grid.Column="0"
+                    <TextBlock Text="V/div:" Grid.Row="0" Grid.Column="0"
                                VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <local:UnitNumericUpDown Grid.Row="0" Grid.Column="1" Width="300" HorizontalAlignment="Left" Margin="0,5,0,0"
-                      BaseValue="{Binding Scale}" UnitSymbol="X"/>
+                      BaseValue="{Binding Scale}" UnitSymbol="V"/>
 
 
                     <TextBlock Text="V Offset:" Grid.Row="1" Grid.Column="0"
                                VerticalAlignment="Center" Margin="0,5,10,0"/>
                     <local:UnitNumericUpDown Grid.Row="1" Grid.Column="1" Width="300" HorizontalAlignment="Left" Margin="0,5,0,0"
-                      IncrementType="Step" Step="0.001"
+                      IncrementType="Step" Step="{Binding Scale}"
                       BaseValue="{Binding VoltageOffset}" UnitSymbol="V"/>
 
                     <TextBlock Text="T Offset:" Grid.Row="2" Grid.Column="0"
                                VerticalAlignment="Center" Margin="0,5,10,0"/>
                     <local:UnitNumericUpDown Grid.Row="2" Grid.Column="1" Width="300" HorizontalAlignment="Left" Margin="0,5,0,0"
                       IncrementType="Step" Step="0.001"
-                      BaseValue="{Binding TimePerDivision}" UnitSymbol="s"/>
+                      BaseValue="{Binding TimeOffset}" UnitSymbol="s"/>
                   </Grid>
                 </StackPanel>
               </Border>

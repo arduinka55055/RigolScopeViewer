@@ -192,7 +192,7 @@ public partial class OscilloscopeControl : UserControl
     }
 
     private void DrawAnalogWaveform(Waveform waveform, int width, int height,
-                                   double timePerDivision, double timeOffset)
+                               double timePerDivision, double timeOffset)
     {
         if (waveform.AnalogData.Length == 0) return;
 
@@ -204,38 +204,75 @@ public partial class OscilloscopeControl : UserControl
             Style = SKPaintStyle.Stroke
         };
 
+        double visibleTime = timePerDivision * 10; // total time shown on screen
+        double timeStart = timeOffset - visibleTime / 2;
+        double timeEnd = timeStart + visibleTime;
+
+        // Pixels per second
+        double pixelsPerSecond = width / visibleTime;
+
+        // Choose appropriate mipmap level
+        var (level, mipData) = SelectMipmap(waveform, width*16);
+
         var path = new SKPath();
-        double pixelsPerSecond = width / (timePerDivision * 10); // 10 divisions
-        double voltsPerDivision = 1.0; // Default
-        double pixelsPerVolt = height / 8.0; // 8 divisions
-
-        double timeStart = timeOffset - timePerDivision * 5; // Center at offset
-        double timeEnd = timeStart + timePerDivision * 10;
-
         bool firstPoint = true;
 
-        for (int i = 0; i < waveform.TimeData.Length; i++)
-        {
-            double time = waveform.TimeData[i] + waveform.TimeOffset;
-            if (time < timeStart || time > timeEnd) continue;
+        // Map mipmap points to pixels
+        double segmentTime = visibleTime / mipData.Length;
 
-            double voltage = waveform.AnalogData[i] * waveform.Scale + waveform.VoltageOffset;
-            float x = (float)((time - timeStart) * pixelsPerSecond);
-            float y = (float)(height / 2 - voltage * pixelsPerVolt);
+        int factor = waveform.AnalogData.Length / mipData.Length;
+
+        // Loop through mipmap segments
+        for (int i = 0; i < mipData.Length; i++)
+        {
+            // Take the corresponding start/end times from original TimeData
+            int startIdx = i * factor;
+            int endIdx = Math.Min((i + 1) * factor - 1, waveform.TimeData.Length - 1);
+
+            double tStart = waveform.TimeData[startIdx] + waveform.TimeOffset;
+            double tEnd = waveform.TimeData[endIdx] + waveform.TimeOffset;
+
+            // Skip segments outside visible range
+            if (tEnd < timeStart || tStart > timeEnd) continue;
+
+            float x = (float)((tStart - timeStart) * pixelsPerSecond);
+            float yMin = (float)(height / 2 - (mipData[i].min * waveform.Scale + waveform.VoltageOffset) * (height / 8.0));
+            float yMax = (float)(height / 2 - (mipData[i].max * waveform.Scale + waveform.VoltageOffset) * (height / 8.0));
+            float yMid = (yMin + yMax) / 2;
 
             if (firstPoint)
             {
-                path.MoveTo(x, y);
+                path.MoveTo(x, yMid);
                 firstPoint = false;
             }
             else
             {
-                path.LineTo(x, y);
+                path.LineTo(x, yMid);
             }
         }
 
         _canvas.DrawPath(path, paint);
     }
+
+    // Helper to select mipmap based on desired horizontal resolution
+    private (int level, (double min, double max)[] mipData) SelectMipmap(Waveform waveform, int desiredPixels)
+    {
+        if(waveform.Mipmaps.Count == 0)
+        {
+            waveform.BuildMipmaps(20);
+        }
+        for (int i = 0; i < waveform.Mipmaps.Count; i++)
+        {
+            if (waveform.Mipmaps[i].Length <= desiredPixels)
+                return (i, waveform.Mipmaps[i]);
+        }
+
+        // Fallback to original data (wrap each value as min=max)
+        return (-1, waveform.AnalogData.Select(v => (v * waveform.Scale + waveform.VoltageOffset,
+                                                     v * waveform.Scale + waveform.VoltageOffset))
+                                      .ToArray());
+    }
+
 
     private void DrawDigitalWaveform(Waveform waveform, int width, int height,
                                     double timePerDivision, double timeOffset)
