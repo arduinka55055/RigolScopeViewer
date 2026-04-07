@@ -27,7 +27,7 @@ public partial class OscilloscopeControlDebug : UserControl
     {
         // Request custom draw operation
         //context.Custom(new VoronoiDrawOperation(new Rect(0, 0, Bounds.Width, Bounds.Height), St.Elapsed.TotalSeconds));
-        context.Custom(new VoronoiDrawOperation(new Rect(default, Bounds.Size), St.Elapsed.TotalSeconds));
+        context.Custom(new DpoDrawOperation(new Rect(0, 0, Bounds.Width, Bounds.Height), 0, 0, -1, 1, 1));
 
         // Schedule next frame for animation
         Dispatcher.UIThread.Post(InvalidateVisual, DispatcherPriority.Render);
