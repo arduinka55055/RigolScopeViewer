@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DPO Осцилограф</title>
+    <style>
+        :root {
+            --bg-color: #0b0c10;
+            --panel-bg: #1f2833;
+            --text-color: #c5c6c7;
+            --accent: #66fcf1;
+            --accent-dim: #45a29e;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .screen-container {
+            position: relative;
+            background-color: #000;
+            border: 2px solid var(--panel-bg);
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            overflow: hidden;
+            /* Aspect ratio approx 16:9 */
+            width: 100%;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .controls {
+            background-color: var(--panel-bg);
+            padding: 20px;
+            border-radius: 8px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: var(--accent);
+            display: flex;
+            justify-content: space-between;
+        }
+        input[type=range] {
+            width: 100%;
+            accent-color: var(--accent);
+        }
+        .info-panel {
+            background-color: rgba(102, 252, 241, 0.1);
+            border-left: 4px solid var(--accent);
+            padding: 15px;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+        button {
+            background-color: var(--accent-dim);
+            color: #000;
+            border: none;
+            padding: 10px 15px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Осцилограма на базі щільності ймовірностей (DPO)</h2>
+    
+    <div class="screen-container">
+        <!-- Main canvas where grid and final image are drawn -->
+        <canvas id="scopeCanvas" width="1200" height="600"></canvas>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>Кількість точок: <span id="valPoints">1 000 000</span></label>
+            <input type="range" id="paramPoints" min="10000" max="10000000" step="10000" value="1000000">
+        </div>
+        <div class="control-group">
+            <label>Амплітуда шуму: <span id="valNoise">0.2 V</span></label>
+            <input type="range" id="paramNoise" min="0" max="1.5" step="0.05" value="0.2">
+        </div>
+        <div class="control-group">
+            <label>Амплітуда викиду (Ringing): <span id="valRing">5 V</span></label>
+            <input type="range" id="paramRing" min="0" max="10" step="0.5" value="5">
+        </div>
+        <div class="control-group">
+            <label>Інтенсивність світіння: <span id="valIntensity">1.5</span></label>
+            <input type="range" id="paramIntensity" min="0.1" max="5.0" step="0.1" value="1.5">
+        </div>
+        <div class="control-group" style="justify-content: flex-end;">
+            <button id="btnRegenerate">Згенерувати та відмалювати</button>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <strong>Як це працює:</strong> Алгоритм не намагається відмалювати мільйони ліній. 
+        Замість цього він розбиває екран на вертикальні колонки (по ширині екрану). 
+        Для кожної колонки рахується середнє значення напруги та дисперсія (розкид) точок, що потрапили в цей час.
+        За допомогою нормального розподілу (Гауссіани) генерується інтенсивність жовтого кольору для кожного пікселя: 
+        чим ближче до середнього значення, тим яскравіше світиться піксель. Це природним чином створює ефект "післясвітіння", як у професійних осцилографах.
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('scopeCanvas');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    
+    // UI Elements
+    const pPoints = document.getElementById('paramPoints');
+    const pNoise = document.getElementById('paramNoise');
+    const pRing = document.getElementById('paramRing');
+    const pIntensity = document.getElementById('paramIntensity');
+    
+    const vPoints = document.getElementById('valPoints');
+    const vNoise = document.getElementById('valNoise');
+    const vRing = document.getElementById('valRing');
+    const vIntensity = document.getElementById('valIntensity');
+
+    // Update UI labels
+    function updateLabels() {
+        vPoints.textContent = parseInt(pPoints.value).toLocaleString('uk-UA');
+        vNoise.textContent = parseFloat(pNoise.value).toFixed(2) + ' V';
+        vRing.textContent = parseFloat(pRing.value).toFixed(1) + ' V';
+        vIntensity.textContent = parseFloat(pIntensity.value).toFixed(1);
+    }
+
+    [pPoints, pNoise, pRing, pIntensity].forEach(el => {
+        el.addEventListener('input', updateLabels);
+    });
+    
+    // Only Intensity can trigger instant redraw without regenerating data
+    pIntensity.addEventListener('change', () => renderOscillogram(lastSignalData));
+    document.getElementById('btnRegenerate').addEventListener('click', generateAndRender);
+
+    // Box-Muller transform for normal distribution noise
+    function randn_bm() {
+        let u = 0, v = 0;
+        while(u === 0) u = Math.random();
+        while(v === 0) v = Math.random();
+        return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    }
+
+    let lastSignalData = null;
+
+    function generateSignal() {
+        const N = parseInt(pPoints.value);
+        const noise_std = parseFloat(pNoise.value);
+        const A_overshoot = parseFloat(pRing.value);
+        
+        const signal = new Float32Array(N);
+        
+        // Physics / Signal parameters
+        const V_amplitude = 3.3;
+        const f_signal = 1e6; // 1 MHz
+        const f_ring = 100e6; // 100 MHz ringing
+        const tau_damp = 15e-9; // Damping time constant
+        const R_reflection = 0.3;
+        const t_delay = 19e-9;
+        
+        const t_total = 4e-6; // Show 4 microseconds (4 periods)
+        const t_step = t_total / N;
+
+        for (let i = 0; i < N; i++) {
+            let t = i * t_step;
+            
+            // 1. Ideal Square Wave
+            let phase = (t * f_signal) % 1.0;
+            let V_ideal = phase < 0.5 ? V_amplitude : -V_amplitude;
+            
+            // 2. Ringing (calculate time since last edge)
+            let time_since_last_edge = phase < 0.5 ? (phase / f_signal) : ((phase - 0.5) / f_signal);
+            let edge_dir = phase < 0.5 ? 1 : -1;
+            let ringing = A_overshoot * Math.exp(-time_since_last_edge / tau_damp) * Math.sin(2 * Math.PI * f_ring * time_since_last_edge) * edge_dir;
+            
+            // 3. Reflection (delayed ideal signal)
+            let V_reflection = 0;
+            let t_delayed = t - t_delay;
+            if (t_delayed > 0) {
+                let phase_d = (t_delayed * f_signal) % 1.0;
+                V_reflection = R_reflection * (phase_d < 0.5 ? V_amplitude : -V_amplitude);
+            }
+            
+            // 4. Add Noise
+            let noise = randn_bm() * noise_std;
+            
+            signal[i] = V_ideal + ringing + V_reflection + noise;
+        }
+        
+        lastSignalData = signal;
+        return signal;
+    }
+
+    // Function to apply horizontal blur to alpha channel to avoid "staircasing"
+    function applyHorizontalBlur(imgData, W, H, iterations=10) {
+        let buf = imgData.data;
+        let tempAlpha = new Uint8Array(W * H);
+        
+        for (let iter = 0; iter < iterations; iter++) {
+            for (let y = 0; y < H; y++) {
+                for (let x = 0; x < W; x++) {
+                    let idx = y * W + x;
+                    let a0 = x > 0 ? buf[((idx - 1) * 4) + 3] : 0;
+                    let a1 = buf[(idx * 4) + 3];
+                    let a2 = x < W - 1 ? buf[((idx + 1) * 4) + 3] : 0;
+                    // [0.25, 0.5, 0.25] kernel
+                    tempAlpha[idx] = (a0 + a1 * 2 + a2) >> 2; 
+                }
+            }
+            // Write back to buffer
+            for (let i = 0; i < W * H; i++) {
+                buf[i * 4 + 3] = tempAlpha[i];
+            }
+        }
+    }
+
+    function renderOscillogram(signal) {
+        if (!signal) return;
+
+        const W = canvas.width;
+        const H = canvas.height;
+        const N = signal.length;
+        
+        // --- 1. Draw Grid ---
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, W, H);
+        
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#1a3320'; // Dark green grid
+        ctx.beginPath();
+        for(let i = 1; i < 10; i++) {
+            // Horizontal divisions
+            ctx.moveTo(0, H * i / 10);
+            ctx.lineTo(W, H * i / 10);
+            // Vertical divisions
+            ctx.moveTo(W * i / 10, 0);
+            ctx.lineTo(W * i / 10, H);
+        }
+        ctx.stroke();
+
+        // Crosshairs
+        ctx.strokeStyle = '#2d5c38';
+        ctx.beginPath();
+        ctx.moveTo(0, H/2); ctx.lineTo(W, H/2);
+        ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H);
+        ctx.stroke();
+
+        // --- 2. Statistical Binning ---
+        // Pre-allocate bins
+        const bins = Array.from({length: W}, () => ({ sum: 0, sumSq: 0, count: 0, min: Infinity, max: -Infinity }));
+        
+        let globalMin = Infinity;
+        let globalMax = -Infinity;
+
+        // O(N) single pass binning
+        for (let i = 0; i < N; i++) {
+            let val = signal[i];
+            let binIdx = Math.min(W - 1, Math.floor((i / N) * W));
+            
+            bins[binIdx].sum += val;
+            bins[binIdx].sumSq += val * val;
+            bins[binIdx].count++;
+            
+            if (val < globalMin) globalMin = val;
+            if (val > globalMax) globalMax = val;
+        }
+
+        // Add some padding to Y-axis
+        const yRange = globalMax - globalMin;
+        const renderMin = globalMin - yRange * 0.1;
+        const renderMax = globalMax + yRange * 0.1;
+
+        // Calculate means and standard deviations for each bin
+        const stats = bins.map(b => {
+            if (b.count === 0) return { mean: NaN, std: 0 };
+            let mean = b.sum / b.count;
+            let variance = (b.sumSq / b.count) - (mean * mean);
+            let std = Math.sqrt(Math.max(0, variance));
+            return { mean, std: std + 1e-6 }; // epsilon to prevent divide by zero
+        });
+
+        // --- 3. Render Heatmap using Offscreen Canvas ---
+        // We render to ImageData, then put it on an offscreen canvas to allow proper alpha blending
+        // over our grid on the main canvas.
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = W;
+        offCanvas.height = H;
+        const offCtx = offCanvas.getContext('2d');
+        const imgData = offCtx.createImageData(W, H);
+        
+        const intensityMult = parseFloat(pIntensity.value);
+        
+        // Phosphor colors: yellow-orange core, fading to dimmer yellow
+        const R = 255, G = 215, B = 0;
+
+        for (let x = 0; x < W; x++) {
+            let mean = stats[x].mean;
+            let std = stats[x].std;
+            
+            if (isNaN(mean)) continue;
+            
+            for (let y = 0; y < H; y++) {
+                // Map pixel Y back to signal voltage space
+                let yVal = renderMin + (renderMax - renderMin) * ((H - 1 - y) / (H - 1));
+                
+                // Normal Color LUT Curve
+                let exponent = -0.5 * Math.pow((yVal - mean) / std, 2);
+                let alpha = Math.exp(exponent) * intensityMult;
+                
+                // Cap alpha at 1.0
+                if (alpha > 1.0) alpha = 1.0;
+                
+                // Only draw if visible to save operations
+                if (alpha > 0.01) {
+                    let idx = (y * W + x) * 4;
+                    imgData.data[idx] = R;
+                    imgData.data[idx + 1] = G;
+                    imgData.data[idx + 2] = B;
+                    imgData.data[idx + 3] = alpha * 255;
+                }
+            }
+        }
+
+        // Apply a slight horizontal blur to simulate continuous beam sweeping
+        applyHorizontalBlur(imgData, W, H, 2);
+
+        // Put the pixels on the offscreen canvas
+        offCtx.putImageData(imgData, 0, 0);
+
+        // Draw offscreen canvas over the main grid with screen blending or normal blending
+        ctx.globalCompositeOperation = 'screen'; // Looks glowing!
+        ctx.drawImage(offCanvas, 0, 0);
+        ctx.globalCompositeOperation = 'source-over'; // Reset
+        
+        // Draw scale text
+        ctx.fillStyle = '#66fcf1';
+        ctx.font = '12px monospace';
+        ctx.fillText(`${renderMax.toFixed(2)} V`, 10, 20);
+        ctx.fillText(`${renderMin.toFixed(2)} V`, 10, H - 10);
+    }
+
+    function generateAndRender() {
+        const btn = document.getElementById('btnRegenerate');
+        btn.textContent = "Рахуємо...";
+        btn.disabled = true;
+        
+        // setTimeout to allow UI to update the button text before heavy computation blocks thread
+        setTimeout(() => {
+            const t0 = performance.now();
+            const signal = generateSignal();
+            const t1 = performance.now();
+            
+            renderOscillogram(signal);
+            const t2 = performance.now();
+            
+            console.log(`Generation: ${(t1-t0).toFixed(1)}ms, Rendering: ${(t2-t1).toFixed(1)}ms`);
+            
+            btn.textContent = "Згенерувати та відмалювати";
+            btn.disabled = false;
+        }, 10);
+    }
+
+    // Initialize on load
+    updateLabels();
+    generateAndRender();
+
+</script>
+</body>
+</html>

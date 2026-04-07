@@ -34,18 +34,18 @@ public partial class MainWindow : Window
                     args.PropertyName == nameof(MainViewModel.ShowTrigger))
                 {
                     // Find the oscilloscope control and update it
-                    var scopeControl = this.FindControl<OscilloscopeControl>("OscilloscopeView");
-                    scopeControl?.RenderWaveforms(
-                        vm.Waveforms,
-                        vm.TimePerDivision,
-                        vm.TimeOffset,
-                        vm.TriggerLevel,
-                        vm.ShowTrigger,
-                        vm.CursorX1,
-                        vm.CursorX2,
-                        vm.CursorY1,
-                        vm.CursorY2
-                    );
+                    var scopeControl = this.FindControl<OscilloscopeControlDebug>("OscilloscopeView");
+                    // scopeControl?.RenderWaveforms(
+                    //     vm.Waveforms,
+                    //     vm.TimePerDivision,
+                    //     vm.TimeOffset,
+                    //     vm.TriggerLevel,
+                    //     vm.ShowTrigger,
+                    //     vm.CursorX1,
+                    //     vm.CursorX2,
+                    //     vm.CursorY1,
+                    //     vm.CursorY2
+                    // );
                 }
             };
         }

@@ -75,7 +75,7 @@
       </Grid.ColumnDefinitions>
 
       <!-- Oscilloscope Display -->
-      <local:OscilloscopeControl x:Name="OscilloscopeView"
+      <local:OscilloscopeControlDebug x:Name="OscilloscopeView"
                                  Grid.Column="0"
                                  Background="LightBlue" />
 
