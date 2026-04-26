@@ -108,5 +108,5 @@ half4 main(vec2 fragCoord) {
 
     public void Dispose() { }
     public bool Equals(ICustomDrawOperation? other) => false;
-    public bool HitTest(Point p) => false;
+    public bool HitTest(Point p) => Bounds.Contains(p);
 }

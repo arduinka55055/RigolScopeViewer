@@ -4,11 +4,11 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <UseAvalonia>true</UseAvalonia>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+    <EmbeddedResource Include="Shaders\*.glsl" />
   </ItemGroup>
 
   <ItemGroup>

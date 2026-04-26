@@ -5,19 +5,22 @@ using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
 using SkiaSharp;
 using System;
+using System.IO;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 
 
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
-public readonly struct ColumnStats
+public readonly struct ColumnStatsOLd
 {
     public readonly Half Mean;    // Поле R в текстурі
     public readonly Half StdDev;  // Поле G в текстурі
     public readonly Half Pad1;    // Поле B
     public readonly Half Pad2;    // Поле A
 
-    public ColumnStats(float mean, float stdDev)
+    public ColumnStatsOLd(float mean, float stdDev)
     {
         Mean = (Half)mean;
         StdDev = (Half)stdDev;
@@ -29,60 +32,12 @@ public readonly struct ColumnStats
 
 public class DpoDrawOperation : ICustomDrawOperation
 {
-    private static readonly SKRuntimeEffect DpoEffect = SKRuntimeEffect.CreateShader(@"
-        uniform vec2 iResolution;
-uniform vec2 iPan;        // Зміщення миші в пікселях під час drag
-uniform float iZoomX;     // Зум по X під час drag (wheel)
-
-uniform float iVoltsMin;  // Нижня межа екрану у вольтах
-uniform float iVoltsMax;  // Верхня межа екрану у вольтах
-uniform float iIntensity;
-
-// Наша 1D текстура з даними бінів.
-uniform shader iDataTexture; 
-
-half4 main(vec2 fragCoord) {
-    // 1. Fake Pan & Zoom (зміщуємо координати екрану)
-    vec2 virtualCoord = fragCoord;
-    virtualCoord.x = (virtualCoord.x - iPan.x) / iZoomX;
-    
-    // Отримуємо нормалізовані координати відносно оригінальної текстури
-    vec2 uv = virtualCoord / iResolution;
-
-    // Якщо ми витягнули графік за межі наявних даних - малюємо чорний фон
-    if (uv.x < 0.0 || uv.x > 1.0) {
-        return half4(0.0, 0.0, 0.0, 1.0);
-    }
-
-    // 2. Читаємо дані біна. 
-    // eval() приймає координати в локальному просторі текстури (від 0 до Width)
-    float sampleX = uv.x * iResolution.x;
-    half4 binData = iDataTexture.eval(vec2(sampleX, 0.5));
-    
-    float mean = binData.r;
-    float stdDev = binData.g;
-
-    // Якщо даних немає (пустий бін), нічого не світиться
-    if (stdDev <= 0.0) return half4(0.0, 0.0, 0.0, 1.0);
-
-    // 3. Мапимо Y-піксель у Вольти
-    // Skia має Y=0 зверху, тому інвертуємо UV по Y
-    float vY = mix(iVoltsMin, iVoltsMax, 1.0 - uv.y);
-
-    // 4. Математика DPO (Гауссіана)
-    float diff = vY - mean;
-    float exponent = -0.5 * (diff * diff) / (stdDev * stdDev);
-    float alpha = exp(exponent) * iIntensity;
-    
-    alpha = clamp(alpha, 0.0, 1.0);
-
-    // Колір фосфору (класичний осцилограф)
-    vec3 color = vec3(1.0, 0.85, 0.1); 
-
-    // Використовуємо alpha-premultiplied вивід для блендингу
-    return half4(color * alpha, 1.0);
-}
-    ", out ShaderCreationErrors);
+    private static readonly string shaderContents = Assembly.GetExecutingAssembly().GetManifestResourceStream("RigolScopeViewer.Shaders.DpoShader.glsl") switch
+    {
+        null => throw new Exception("Failed to load embedded shader resource."),
+        var stream => new StreamReader(stream).ReadToEnd()
+    };
+    private static readonly SKRuntimeEffect DpoEffect = SKRuntimeEffect.CreateShader(shaderContents, out ShaderCreationErrors);
     private static string? ShaderCreationErrors;
 
     private static bool ErrorShown = false;
@@ -186,17 +141,18 @@ half4 main(vec2 fragCoord) {
         {
             _dataBitmap?.Dispose();
             // RgbaF32: 4 float-канали на піксель = ідеально для наших даних
-            var info = new SKImageInfo(width, 1, SKColorType.RgbaF16, SKAlphaType.Unpremul, SKColorSpace.CreateSrgbLinear());
+            var info = new SKImageInfo(width, 1, SKColorType.RgF16, SKAlphaType.Unpremul, SKColorSpace.CreateSrgbLinear());
             _dataBitmap = new SKBitmap(info);
             _cachedWidth = width;
         }
     }
 
     // Це просто для тесту, у реальному житті сюди прилітатиме масив від IBinningEngine
-    private unsafe void UpdateMockData(int width)
+    private void UpdateMockData(int width)
     {
-        // Отримуємо прямий вказівник на пам'ять картинки
-        ColumnStats* ptr = (ColumnStats*)_dataBitmap!.GetPixels();
+        // Отримуємо прямий (безпечний) вказівник на пам'ять картинки
+        var bytePtr = _dataBitmap!.GetPixelSpan();
+        var ptr = MemoryMarshal.Cast<byte, ColumnStats>(bytePtr);
 
         for (int i = 0; i < width; i++)
         {
@@ -212,8 +168,8 @@ half4 main(vec2 fragCoord) {
         }
     }
 
-    public void Dispose() { }
+    public void Dispose() => GC.SuppressFinalize(this);
     public bool Equals(ICustomDrawOperation? other) => false;
-    public bool HitTest(Point p) => false;
+    public bool HitTest(Point p) => Bounds.Contains(p);
 
 }

@@ -1,73 +1,124 @@
 using System;
-using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Media;
-using Avalonia.Threading;
 
 namespace RigolScopeViewer;
 
 public class VoronoiControl : Control
 {
-    private static readonly Stopwatch St = Stopwatch.StartNew();
-    private bool _isRunning;
+    // 1. Стан нашого екрану (виносимо з Render)
+    private double _panX = 0.0;
+    private double _panY = 0.0;
+    private double _zoomX = 1.0;
+    private float _voltsMin = -4.0f;
+    private float _voltsMax = 4.0f;
+    private float _intensity = 2.0f;
 
-    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
-    {
-        base.OnAttachedToVisualTree(e);
+    // 2. Змінні для логіки перетягування (Drag)
+    private bool _isDragging = false;
+    private Point? _lastMousePosition;
 
-        // Start the animation loop when the control appears
-        _isRunning = true;
-        QueueNextFrame();
-    }
-
-    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
-    {
-        base.OnDetachedFromVisualTree(e);
-
-        // STOP the loop when the control is removed (prevents memory leaks/ghost CPU usage)
-        _isRunning = false;
-    }
-
-    private void QueueNextFrame()
-    {
-        if (!_isRunning) return;
-
-        var topLevel = TopLevel.GetTopLevel(this);
-        if (topLevel != null)
-        {
-            // Syncs the redraw exactly to the monitor's refresh rate
-            topLevel.RequestAnimationFrame(_ =>
-            {
-                if (!_isRunning) return;
-                InvalidateVisual(); // Trigger Render()
-                QueueNextFrame();   // Loop
-            });
-        }
-    }
+    // Прибираємо постійний цикл анімації (QueueNextFrame),
+    // тепер ми рендеримо лише коли є зміни!
 
     public override void Render(DrawingContext context)
     {
-        // 1. Задаємо тестові параметри
-        var bounds = new Rect(default, Bounds.Size); // Розмір поточного контрола
-        double panX = 0.0;       // Мишка нічого не тягне, зсув нульовий
-        double zoomX = 1.0;      // Нормальний масштаб 1:1
-        float voltsMin = -4.0f;  // Нижня межа екрану (наприклад, -4 Вольта)
-        float voltsMax = 4.0f;   // Верхня межа екрану (+4 Вольта)
-        float intensity = 2.0f;  // Множник яскравості "фосфору" (2.0 дасть гарне світіння)
+        var bounds = new Rect(default, Bounds.Size);
 
-        // 2. Передаємо їх у наш новий рендерер
         context.Custom(new DpoDrawOperation(
             bounds,
-            panX,
-            zoomX,
-            voltsMin,
-            voltsMax,
-            intensity
+            _panX,
+            _zoomX,
+            _voltsMin,
+            _voltsMax,
+            _intensity
         ));
+    }
 
-        // 3. Залишаємо цикл перемальовки, щоб перевірити FPS 
-        // (Але в реальному житті роби InvalidateVisual лише коли прийшли нові дані або юзер зробив Drag/Zoom!)
-        Dispatcher.UIThread.Post(InvalidateVisual, DispatcherPriority.Render);
+    // --- ОБРОБКА ЖЕСТІВ ---
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        
+        var point = e.GetCurrentPoint(this);
+        
+        // Починаємо тягнути тільки якщо натиснута ліва кнопка
+        if (point.Properties.IsLeftButtonPressed)
+        {
+            _isDragging = true;
+            _lastMousePosition = point.Position;
+            
+            // "Захоплюємо" мишу. Навіть якщо курсор вийде за межі контрола,
+            // ми все одно будемо отримувати події руху.
+            e.Pointer.Capture(this); 
+        }
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+
+        if (_isDragging && _lastMousePosition.HasValue)
+        {
+            var currentPosition = e.GetPosition(this);
+            
+            // Рахуємо, на скільки пікселів зсунулась миша
+            var deltaX = currentPosition.X - _lastMousePosition.Value.X;
+            var deltaY = currentPosition.Y - _lastMousePosition.Value.Y;
+
+            // Додаємо зсув до нашого глобального панорамування
+            _panX += deltaX; 
+            _panY += deltaY;
+
+            // Оновлюємо останню позицію
+            _lastMousePosition = currentPosition;
+
+            // КАЖЕМО AVALONIA ПЕРЕМАЛЮВАТИ КАДР!
+            InvalidateVisual(); 
+        }
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+
+        if (_isDragging)
+        {
+            _isDragging = false;
+            _lastMousePosition = null;
+            e.Pointer.Capture(null); // Відпускаємо мишу
+
+            // ТУТ БУДЕ МАГІЯ:
+            // Коли користувач відпустив мишу (Drop), текстура зміщена.
+            // Саме тут ти маєш викликати подію для своєї ViewModel / IBinningEngine:
+            // "Гей, юзер зсунув екран на _panX пікселів, дай мені нові дані!"
+            // А коли нові дані прийдуть, ти обнулиш _panX = 0; і зробиш InvalidateVisual();
+        }
+    }
+
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+    {
+        base.OnPointerWheelChanged(e);
+
+        // e.Delta.Y > 0 означає скрол вгору (зум in)
+        // e.Delta.Y < 0 означає скрол вниз (зум out)
+        double zoomFactor = 1.15; // Крок зуму 15%
+
+        if (e.Delta.Y > 0)
+        {
+            _zoomX *= zoomFactor;
+        }
+        else if (e.Delta.Y < 0)
+        {
+            _zoomX /= zoomFactor;
+        }
+
+        // Обмежуємо зум, щоб уникнути вильоту математики
+        _zoomX = Math.Clamp(_zoomX, 0.01, 1000.0);
+
+        InvalidateVisual(); // Перемалювати з новим зумом
     }
 }
