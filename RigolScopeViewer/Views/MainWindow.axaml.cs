@@ -27,8 +27,7 @@ public partial class MainWindow : Window
             // Subscribe to property changes to update the display
             vm.PropertyChanged += (sender, args) =>
             {
-                if (args.PropertyName == nameof(MainViewModel.Waveforms) ||
-                    args.PropertyName == nameof(MainViewModel.TimePerDivision) ||
+                if (args.PropertyName == nameof(MainViewModel.TimePerDivision) ||
                     args.PropertyName == nameof(MainViewModel.TimeOffset) ||
                     args.PropertyName == nameof(MainViewModel.TriggerLevel) ||
                     args.PropertyName == nameof(MainViewModel.ShowTrigger))

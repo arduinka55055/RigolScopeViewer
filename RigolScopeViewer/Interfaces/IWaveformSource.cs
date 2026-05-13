@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Numerics;
+using System.Threading.Tasks;
 using RigolScopeViewer.Models;
 
 namespace RigolScopeViewer.Interfaces;
@@ -20,4 +21,6 @@ public interface IWaveformSource : IDisposable
     void ProcessChannelData(int channelIndex, double startTime, double endTime, DataProcessor processor);
     void Start();
     void Stop();
+    // Запускає налаштування джерела даних (наприклад, вибір файлу, підключення до приладу тощо)
+    Task<bool> RunSetupAsync();
 }

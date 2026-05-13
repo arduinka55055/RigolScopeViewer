@@ -1,36 +1,40 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using RigolScopeViewer.Models;
 using System;
 using System.ComponentModel;
 
 namespace RigolScopeViewer.ViewModels;
 
-public partial class ChannelViewModel(Waveform waveform, Action updateCallback) : ViewModelBase
+public partial class ChannelViewModel(dynamic waveform, Action updateCallback) : ViewModelBase
 {
     public string Name => waveform.Name;
 
     public bool IsVisible
     {
         get => waveform.IsVisible;
-        set => SetProperty(waveform.IsVisible, value, waveform, (w, v) => w.IsVisible = v);
+        //set => SetProperty(waveform.IsVisible, value, waveform, (w, v) => w.IsVisible = v);
+        set { } //FIXME:
     }
 
     public double Scale
     {
         get => waveform.Scale;
-        set => SetProperty(waveform.Scale, value, waveform, (w, v) => w.Scale = v);
+        //set => SetProperty(waveform.Scale, value, waveform, (w, v) => w.Scale = v);
+        set { }
     }
 
     public double VoltageOffset
     {
         get => waveform.VoltageOffset;
-        set => SetProperty(waveform.VoltageOffset, value, waveform, (w, v) => w.VoltageOffset = v);
+        //set => SetProperty(waveform.VoltageOffset, value, waveform, (w, v) => w.VoltageOffset = v);
+        set { }
     }
 
     public double TimeOffset
     {
         get => waveform.TimeOffset;
-        set => SetProperty(waveform.TimeOffset, value, waveform, (w, v) => w.TimeOffset = v);
+        //set => SetProperty(waveform.TimeOffset, value, waveform, (w, v) => w.TimeOffset = v);
+        set { }
     }
 
     // Override OnPropertyChanged ONLY to handle your global callback

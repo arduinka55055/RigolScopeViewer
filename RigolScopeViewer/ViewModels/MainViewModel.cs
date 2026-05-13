@@ -12,13 +12,13 @@ using System.Linq;
 using System.Windows.Input;
 using RigolScopeViewer.Sources.CSV;
 using RigolScopeViewer.Sources;
+using RigolScopeViewer.Interfaces;
 
 namespace RigolScopeViewer.ViewModels;
 
 
 public class MainViewModel : ViewModelBase
 {
-    private List<Waveform> _waveforms = new();
     private double _timePerDivision = 0.001; // 1ms/div
     private double _timeOffset;
     private double _triggerLevel;
@@ -84,28 +84,22 @@ public class MainViewModel : ViewModelBase
         ZoomOutCommand = new RelayCommand(() => TimePerDivision *= 1.25);
 
         // Demo data for testing
-        _waveforms.Add(CreateSineWave("CH1", 1, 1000, 0, Colors.Yellow));
-        _waveforms.Add(CreateSineWave("CH2", 0.5, 500, 0.5, Colors.Cyan));
         InitializeChannels();
     }
 
     private void InitializeChannels()
     {
         Channels.Clear();
-        foreach (var waveform in _waveforms)
-        {
-            Channels.Add(new ChannelViewModel(waveform, UpdateWaveforms));
-        }
+
         UpdateWaveforms();
     }
 
     private void UpdateWaveforms()
     {
         // Notify UI to redraw
-        OnPropertyChanged(nameof(Waveforms));
+        //OnPropertyChanged(nameof(Waveforms));
     }
 
-    public List<Waveform> Waveforms => _waveforms;
 
     private async void OpenFile()
     {
@@ -121,78 +115,28 @@ public class MainViewModel : ViewModelBase
         {
             var fileName = result[0];
 
-            // TODO: Move this logic to a service or factory that returns IWaveformSource based on file type
-            if (Path.GetExtension(fileName).ToLower() == ".csv")
+            IWaveformSource loader = Path.GetExtension(fileName).ToLower() switch
             {
-                var debug = new CsvWaveformSource(fileName);
-                debug.RunSetupAsync().Wait();
-                Console.WriteLine($"Loaded {debug.ChannelCount} waveforms from CSV");
-                debug.ProcessChannelData(0, 0, float.PositiveInfinity, (span, in metadata) =>
-                {
-                    Console.WriteLine($"Received {span.Length} points from CSV");
-                    // Тут можна конвертувати span в double[] і створювати Waveform
-
-                    // запихуємо спан у масив бо ми говнокодери
-                    float[] floats = span.ToArray();
-                    GodObject.ChannelDataReady = () => floats;
-                    GodObject.WaveMetadata = metadata;
-                });
-                //InitializeChannels();
-                return;
-            }
-
-            if (Path.GetExtension(fileName).ToLower() == ".bin")
-            {
-                var debug = new RigolBinSource(fileName);
-                debug.RunSetupAsync().Wait();
-                Console.WriteLine($"Loaded {debug.ChannelCount} waveforms from CSV");
-                debug.ProcessChannelData(0, 0, float.PositiveInfinity, (span, in metadata) =>
-                {
-                    Console.WriteLine($"Received {span.Length} points from CSV");
-                    // Тут можна конвертувати span в double[] і створювати Waveform
-
-                    // запихуємо спан у масив бо ми говнокодери
-                    float[] floats = span.ToArray();
-                    GodObject.ChannelDataReady = () => floats;
-                    GodObject.WaveMetadata = metadata;
-                });
-                //InitializeChannels();
-                return;
-            }
-
-            IWaveformLoader loader = Path.GetExtension(fileName).ToLower() switch
-            {
-                ".bin" => new RigolBinLoader(),
-                ".csv" => new CsvLoader(),
+                ".bin" => new RigolBinSource(fileName),
+                ".csv" => new CsvWaveformSource(fileName),
                 _ => throw new NotSupportedException("Unsupported file format")
             };
+            await loader.RunSetupAsync();
+            Console.WriteLine($"Loaded {loader.ChannelCount} waveforms");
+            loader.ProcessChannelData(0, 0, float.PositiveInfinity, (span, in metadata) =>
+            {
+                Console.WriteLine($"Received {span.Length} points from loader");
+                // Тут можна конвертувати span в double[] і створювати Waveform
 
-            _waveforms = loader.Load(fileName);
+                // запихуємо спан у масив бо ми говнокодери
+                float[] floats = span.ToArray();
+                GodObject.ChannelDataReady = () => floats;
+                GodObject.WaveMetadata = metadata;
+            });
+
+            //_waveforms = loader.Load(fileName);
             InitializeChannels();
         }
     }
 
-    private Waveform CreateSineWave(string name, double amplitude, double frequency,
-                                   double phase, Color color)
-    {
-        var points = 1000;
-        var timeData = new double[points];
-        var analogData = new double[points];
-
-        for (var i = 0; i < points; i++)
-        {
-            var t = i / (double)points * 0.01; // 10ms time window
-            timeData[i] = t;
-            analogData[i] = amplitude * Math.Sin(2 * Math.PI * frequency * t + phase);
-        }
-
-        return new Waveform
-        {
-            Name = name,
-            Type = WaveformType.Analog,
-            TimeData = timeData,
-            AnalogData = analogData,
-            Color = color
-        };
-    }
 }

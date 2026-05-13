@@ -20,22 +20,19 @@ public class RigolBinSource(string filePath) : IWaveformSource
     public event EventHandler? DataReady;
     public int ChannelCount => _channelData?.Length ?? 0;
 
-    public Task<bool> RunSetupAsync()
+    public async Task<bool> RunSetupAsync()
     {
         // Binary files typically do not need user setup
-        return Task.Run(() =>
+        try
         {
-            try
-            {
-                ParseFile();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error parsing bin file: {ex.Message}");
-                return false;
-            }
-        });
+            await Task.Run(ParseFile);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error parsing bin file: {ex.Message}");
+            return false;
+        }
     }
 
     private void ParseFile()
