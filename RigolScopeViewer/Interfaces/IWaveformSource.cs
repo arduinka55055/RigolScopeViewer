@@ -18,9 +18,6 @@ public interface IWaveformSource : IDisposable
 
     // Запитуємо дані ДЛЯ КОНКРЕТНОГО КАНАЛУ
     void ProcessChannelData(int channelIndex, double startTime, double endTime, DataProcessor processor);
-
-    Vector2 GetFitScreenTime(int channelIndex);
-
     void Start();
     void Stop();
 }

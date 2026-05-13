@@ -8,6 +8,7 @@ using RigolScopeViewer.Models;
 using SkiaSharp;
 using System;
 using System.IO;
+using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -164,9 +165,10 @@ public class DpoDrawOperation : ICustomDrawOperation
 
         // use dpobinningengine (debug)
         if (GodObject.ChannelDataReady == null) return;
-        float[] rawData = GodObject.ChannelDataReady();
+        var rawData = GodObject.ChannelDataReady();
         var engine = new DpoBinningEngine();
-        engine.Resample(rawData, GodObject.WaveMetadata, 0, 100000, ptr);
+        var viewport = GodObject.WaveMetadata.FitScreenTime;
+        engine.Resample(rawData, GodObject.WaveMetadata, viewport.X, viewport.Y, ptr);
 
     }
 

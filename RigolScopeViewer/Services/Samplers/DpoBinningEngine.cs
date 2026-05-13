@@ -42,7 +42,7 @@ public class DpoBinningEngine : IResampler<ColumnStats>
             var voltage = sourceVoltages[i];
             var time = metadata.StartTime + (i * metadata.SampleInterval);
 
-            var binIndex = i/18;//(int)((time - viewportStartTime) / timeRange * binCount);
+            var binIndex = (int)((time - viewportStartTime) / timeRange * binCount);
             if (binIndex >= 0 && binIndex < binCount)
             {
                 sums[binIndex] += voltage;

@@ -181,14 +181,4 @@ public class CsvWaveformSource(string filePath) : IWaveformSource
         _channelData = null;
         _metadata = null;
     }
-
-
-    public Vector2 GetFitScreenTime(int channelIndex)
-    {
-        if (_metadata == null || channelIndex < 0 || channelIndex >= ChannelCount)
-            return new Vector2(0, 1); // Дефолтний діапазон
-
-        var meta = _metadata[channelIndex];
-        return new Vector2(meta.StartTime, meta.StartTime + meta.SampleInterval * meta.TotalPoints);
-    }
 }

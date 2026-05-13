@@ -11,6 +11,7 @@ using System.IO;
 using System.Linq;
 using System.Windows.Input;
 using RigolScopeViewer.Sources.CSV;
+using RigolScopeViewer.Sources;
 
 namespace RigolScopeViewer.ViewModels;
 
@@ -120,9 +121,29 @@ public class MainViewModel : ViewModelBase
         {
             var fileName = result[0];
 
+            // TODO: Move this logic to a service or factory that returns IWaveformSource based on file type
             if (Path.GetExtension(fileName).ToLower() == ".csv")
             {
                 var debug = new CsvWaveformSource(fileName);
+                debug.RunSetupAsync().Wait();
+                Console.WriteLine($"Loaded {debug.ChannelCount} waveforms from CSV");
+                debug.ProcessChannelData(0, 0, float.PositiveInfinity, (span, in metadata) =>
+                {
+                    Console.WriteLine($"Received {span.Length} points from CSV");
+                    // Тут можна конвертувати span в double[] і створювати Waveform
+
+                    // запихуємо спан у масив бо ми говнокодери
+                    float[] floats = span.ToArray();
+                    GodObject.ChannelDataReady = () => floats;
+                    GodObject.WaveMetadata = metadata;
+                });
+                //InitializeChannels();
+                return;
+            }
+
+            if (Path.GetExtension(fileName).ToLower() == ".bin")
+            {
+                var debug = new RigolBinSource(fileName);
                 debug.RunSetupAsync().Wait();
                 Console.WriteLine($"Loaded {debug.ChannelCount} waveforms from CSV");
                 debug.ProcessChannelData(0, 0, float.PositiveInfinity, (span, in metadata) =>

@@ -1,35 +1,48 @@
-﻿using RigolScopeViewer.Models;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using Avalonia.Media;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using RigolScopeViewer.Interfaces;
-using System.Numerics;
+using RigolScopeViewer.Models;
 
-namespace RigolScopeViewer.Services;
+namespace RigolScopeViewer.Sources;
 
-public class RigolBinSource : IWaveformSource
+public class RigolBinSource(string filePath) : IWaveformSource
 {
-    public int ChannelCount => throw new NotImplementedException();
+    private readonly string _filePath = filePath;
+
+    // Всі дані лежать тут. 1-й вимір - канал, 2-й вимір - точки
+    private float[][]? _channelData;
+    private WaveformMetadata[]? _metadata;
 
     public event EventHandler? DataReady;
+    public int ChannelCount => _channelData?.Length ?? 0;
 
-    public void Dispose()
+    public Task<bool> RunSetupAsync()
     {
-        throw new NotImplementedException();
+        // Binary files typically do not need user setup
+        return Task.Run(() =>
+        {
+            try
+            {
+                ParseFile();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error parsing bin file: {ex.Message}");
+                return false;
+            }
+        });
     }
 
-    public WaveformMetadata GetMetadata(int channelIndex)
+    private void ParseFile()
     {
-        throw new NotImplementedException();
-    }
+        if (!File.Exists(_filePath)) return;
 
-    private List<Waveform> Load(string fileName)
-    {
-        var waveforms = new List<Waveform>();
-        using var stream = File.OpenRead(fileName);
+        using var stream = File.OpenRead(_filePath);
         using var reader = new BinaryReader(stream);
 
         // File header (16 bytes)
@@ -40,6 +53,9 @@ public class RigolBinSource : IWaveformSource
         var version = reader.ReadBytes(2);
         var fileSize = reader.ReadInt64();
         var numWaveforms = reader.ReadInt32();
+
+        var tempChannelData = new List<float[]>();
+        var tempMetadata = new List<WaveformMetadata>();
 
         for (var i = 0; i < numWaveforms; i++)
         {
@@ -74,80 +90,83 @@ public class RigolBinSource : IWaveformSource
             // Read waveform data
             var data = reader.ReadBytes((int)bufferSize);
 
-            // Create time array
-            var timeData = new double[numPoints];
-            for (var j = 0; j < numPoints; j++)
-            {
-                timeData[j] = xOrigin + j * xIncrement;
-            }
-
             if (bufferType == 1) // Analog data
             {
                 var floatData = new float[numPoints];
                 Buffer.BlockCopy(data, 0, floatData, 0, data.Length);
-                var analogData = floatData.Select(f => (double)f).ToArray();
 
-                waveforms.Add(new Waveform
+                tempChannelData.Add(floatData);
+                tempMetadata.Add(new WaveformMetadata
                 {
-                    Name = channelName,
-                    Type = WaveformType.Analog,
-                    TimeData = timeData,
-                    AnalogData = analogData,
-                    Color = GetChannelColor(i)
+                    ChannelName = channelName,
+                    StartTime = (float)xOrigin,
+                    SampleInterval = (float)xIncrement,
+                    TotalPoints = numPoints
                 });
             }
             else if (bufferType == 5) // Digital data
             {
-                waveforms.Add(new Waveform
+                var floatData = new float[numPoints];
+                for (int j = 0; j < numPoints; j++)
                 {
-                    Name = channelName,
-                    Type = WaveformType.Digital,
-                    TimeData = timeData,
-                    DigitalData = data,
-                    Color = GetChannelColor(i)
+                    floatData[j] = data[j];
+                }
+
+                tempChannelData.Add(floatData);
+                tempMetadata.Add(new WaveformMetadata
+                {
+                    ChannelName = channelName,
+                    StartTime = (float)xOrigin,
+                    SampleInterval = (float)xIncrement,
+                    TotalPoints = numPoints
                 });
             }
         }
 
-        return waveforms;
+        _channelData = tempChannelData.ToArray();
+        _metadata = tempMetadata.ToArray();
+    }
+
+    public WaveformMetadata GetMetadata(int channelIndex)
+    {
+        return _metadata?[channelIndex] ?? default;
     }
 
     public void ProcessChannelData(int channelIndex, double startTime, double endTime, DataProcessor processor)
     {
-        throw new NotImplementedException();
+        if (_channelData == null || channelIndex < 0 || channelIndex >= ChannelCount) return;
+
+        var meta = _metadata[channelIndex];
+        var data = _channelData[channelIndex];
+
+        // Конвертуємо час у індекси масиву
+        var startIndex = (int)((startTime - meta.StartTime) / meta.SampleInterval);
+        var endIndex = (int)((endTime - meta.StartTime) / meta.SampleInterval);
+
+        startIndex = Math.Clamp(startIndex, 0, data.Length);
+        endIndex = Math.Clamp(endIndex, startIndex, data.Length);
+
+        if (endIndex <= startIndex) return;
+
+        ReadOnlySpan<float> slice = data.AsSpan(startIndex, endIndex - startIndex);
+
+        processor(slice, meta);
     }
 
     public void Start()
     {
-        throw new NotImplementedException();
-    }
-
-    public void Stop()
-    {
-        throw new NotImplementedException();
-    }
-
-    private Color GetChannelColor(int index)
-    {
-        return index switch
+        if (_channelData != null)
         {
-            0 => Colors.Yellow,
-            1 => Colors.Cyan,
-            2 => Colors.Magenta,
-            3 => Colors.Blue,
-            4 => Colors.Lime,
-            5 => Colors.Orange,
-            _ => Colors.White
-        };
+            DataReady?.Invoke(this, EventArgs.Empty);
+        }
     }
 
-    WaveformMetadata IWaveformSource.GetMetadata(int channelIndex)
-    {
-        throw new NotImplementedException();
-    }
+    public void Stop() { }
 
-    public Vector2 GetFitScreenTime(int channelIndex)
+    public void Dispose()
     {
-        throw new NotImplementedException();
+        GC.SuppressFinalize(this);
+        _channelData = null;
+        _metadata = null;
     }
 }
