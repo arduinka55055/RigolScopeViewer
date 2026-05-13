@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -27,7 +27,8 @@ public partial class OscilloscopeControlDebug : UserControl
     {
         // Request custom draw operation
         //context.Custom(new VoronoiDrawOperation(new Rect(0, 0, Bounds.Width, Bounds.Height), St.Elapsed.TotalSeconds));
-        context.Custom(new DpoDrawOperation(new Rect(0, 0, Bounds.Width, Bounds.Height), 0, 0, -1, 1, 1));
+        var operation = new DpoDrawOperation(new Rect(0, 0, Bounds.Width, Bounds.Height), 0, 0, -1, 1, 1);
+        context.Custom(operation);
 
         // Schedule next frame for animation
         Dispatcher.UIThread.Post(InvalidateVisual, DispatcherPriority.Render);

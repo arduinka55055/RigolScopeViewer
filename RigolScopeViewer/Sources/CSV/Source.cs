@@ -1,0 +1,194 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Numerics;
+using System.Threading.Tasks;
+using RigolScopeViewer.Interfaces;
+using RigolScopeViewer.Models;
+
+namespace RigolScopeViewer.Sources.CSV;
+
+public class CsvWaveformSource(string filePath) : IWaveformSource
+{
+    private readonly string _filePath = filePath;
+    private readonly CsvSourceConfig _config = ConfigManager.Load<CsvSourceConfig>("csv_config.json");
+
+    // Всі дані лежать тут. 1-й вимір - канал, 2-й вимір - точки
+    private float[][]? _channelData;
+    private WaveformMetadata[]? _metadata;
+
+    public event EventHandler? DataReady;
+    public int ChannelCount => _channelData?.Length ?? 0;
+
+    public static bool SetupNeeded => true;
+
+    public async Task<bool> RunSetupAsync()
+    {
+        // ТУТ МАЄ БУТИ ВИКЛИК AVALONIA ДІАЛОГУ
+        // Наприклад: 
+        // var dialog = new CsvSetupWizard(_config, previewFilePath: _filePath);
+        // bool result = await dialog.ShowDialog(mainWindow);
+        // if (!result) return false;
+
+        // Для симуляції припустимо, що юзер зберіг налаштування:
+        ConfigManager.Save(_config, "csv_config.json");
+
+        // Після налаштування парсимо файл
+        ParseFile();
+        return true;
+    }
+
+    private void ParseFile()
+    {
+        if (!File.Exists(_filePath)) return;
+
+        // Використовуємо списки як тимчасові буфери під час читання
+        var tempBuffers = new List<List<float>>();
+        var channelNames = new List<string>();
+
+        using var reader = new StreamReader(_filePath);
+
+        var isFirstRow = true;
+        var firstTime = 0f;
+        var secondTime = 0f;
+        var rowIndex = 0;
+
+        while (!reader.EndOfStream)
+        {
+            var line = reader.ReadLine();
+            if (string.IsNullOrWhiteSpace(line)) continue;
+
+            // Швидкий спліт (швидше ніж LINQ)
+            var parts = line.Split(',');
+
+            if (isFirstRow && _config.HasHeaderRow)
+            {
+                var startIdx = _config.Mode == CsvImportMode.Timestamped ? 1 : 0;
+                for (var i = startIdx; i < parts.Length; i++)
+                {
+                    channelNames.Add(parts[i].Trim());
+                    tempBuffers.Add(new List<float>(100_000)); // Зарезервуємо пам'ять
+                }
+                isFirstRow = false;
+                continue;
+            }
+
+            // Якщо хедерів немає, створюємо дефолтні імена при першому рядку
+            if (isFirstRow && !_config.HasHeaderRow)
+            {
+                var startIdx = _config.Mode == CsvImportMode.Timestamped ? 1 : 0;
+                for (var i = startIdx; i < parts.Length; i++)
+                {
+                    channelNames.Add($"Channel {i - startIdx + 1}");
+                    tempBuffers.Add(new List<float>(100_000));
+                }
+            }
+
+            var dataOffset = 0;
+
+            if (_config.Mode == CsvImportMode.Timestamped)
+            {
+                // Парсимо час лише для перших двох рядків, щоб знайти SampleInterval
+                if (rowIndex == 0 && float.TryParse(parts[0], NumberStyles.Any, CultureInfo.InvariantCulture, out var t1))
+                    firstTime = t1;
+                else if (rowIndex == 1 && float.TryParse(parts[0], NumberStyles.Any, CultureInfo.InvariantCulture, out var t2))
+                    secondTime = t2;
+
+                dataOffset = 1;
+            }
+
+            // Парсимо напруги для всіх каналів
+            for (var i = 0; i < tempBuffers.Count; i++)
+            {
+                if (i + dataOffset < parts.Length &&
+                    float.TryParse(parts[i + dataOffset], NumberStyles.Any, CultureInfo.InvariantCulture, out var val))
+                {
+                    tempBuffers[i].Add(val);
+                }
+                else
+                {
+                    tempBuffers[i].Add(0f); // Fallback для битих рядків
+                }
+            }
+
+            rowIndex++;
+            isFirstRow = false;
+        }
+
+        // --- Перетворення тимчасових списків у швидкі масиви ---
+        _channelData = new float[tempBuffers.Count][];
+        _metadata = new WaveformMetadata[tempBuffers.Count];
+
+        var calculatedInterval = _config.Mode == CsvImportMode.Timestamped && rowIndex > 1
+            ? (secondTime - firstTime)
+            : _config.ManualSampleInterval;
+
+        if (calculatedInterval <= 0) calculatedInterval = 1e-6f; // Захист від ділення на нуль
+
+        for (var i = 0; i < tempBuffers.Count; i++)
+        {
+            _channelData[i] = tempBuffers[i].ToArray(); // Конвертуємо в безперервний масив
+
+            _metadata[i] = new WaveformMetadata
+            {
+                StartTime = firstTime,
+                SampleInterval = calculatedInterval,
+                TotalPoints = _channelData[i].Length,
+                ChannelName = channelNames[i]
+            };
+
+            // Звільняємо пам'ять списку
+            tempBuffers[i] = null;
+        }
+    }
+
+    public WaveformMetadata GetMetadata(int channelIndex) => _metadata[channelIndex];
+
+    public void ProcessChannelData(int channelIndex, double startTime, double endTime, DataProcessor processor)
+    {
+        if (_channelData == null || channelIndex < 0 || channelIndex >= ChannelCount) return;
+
+        var meta = _metadata[channelIndex];
+        var data = _channelData[channelIndex];
+
+        // Конвертуємо час у індекси масиву
+        var startIndex = (int)((startTime - meta.StartTime) / meta.SampleInterval);
+        var endIndex = (int)((endTime - meta.StartTime) / meta.SampleInterval);
+
+        startIndex = Math.Clamp(startIndex, 0, data.Length);
+        endIndex = Math.Clamp(endIndex, startIndex, data.Length);
+
+        // Магія Zero-Allocation! Віддаємо лише шматочок масиву через Span.
+        ReadOnlySpan<float> slice = data.AsSpan(startIndex, endIndex - startIndex);
+
+        processor(slice, meta);
+    }
+
+    public void Start()
+    {
+        if (_channelData != null)
+        {
+            DataReady?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    public void Stop() { }
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
+        _channelData = null;
+        _metadata = null;
+    }
+
+
+    public Vector2 GetFitScreenTime(int channelIndex)
+    {
+        if (_metadata == null || channelIndex < 0 || channelIndex >= ChannelCount)
+            return new Vector2(0, 1); // Дефолтний діапазон
+
+        var meta = _metadata[channelIndex];
+        return new Vector2(meta.StartTime, meta.StartTime + meta.SampleInterval * meta.TotalPoints);
+    }
+}

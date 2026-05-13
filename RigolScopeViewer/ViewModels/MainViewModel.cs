@@ -10,6 +10,7 @@ using Avalonia.Media;
 using System.IO;
 using System.Linq;
 using System.Windows.Input;
+using RigolScopeViewer.Sources.CSV;
 
 namespace RigolScopeViewer.ViewModels;
 
@@ -21,10 +22,6 @@ public class MainViewModel : ViewModelBase
     private double _timeOffset;
     private double _triggerLevel;
     private bool _showTrigger = true;
-    private double _cursorX1;
-    private double _cursorX2;
-    private double _cursorY1;
-    private double _cursorY2;
 
     public ObservableCollection<ChannelViewModel> Channels { get; } = new();
     public ICommand OpenCommand { get; }
@@ -78,49 +75,6 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    public double CursorX1
-    {
-        get => _cursorX1;
-        set
-        {
-            _cursorX1 = value;
-            OnPropertyChanged();
-            UpdateWaveforms();
-        }
-    }
-
-    public double CursorX2
-    {
-        get => _cursorX2;
-        set
-        {
-            _cursorX2 = value;
-            OnPropertyChanged();
-            UpdateWaveforms();
-        }
-    }
-
-    public double CursorY1
-    {
-        get => _cursorY1;
-        set
-        {
-            _cursorY1 = value;
-            OnPropertyChanged();
-            UpdateWaveforms();
-        }
-    }
-
-    public double CursorY2
-    {
-        get => _cursorY2;
-        set
-        {
-            _cursorY2 = value;
-            OnPropertyChanged();
-            UpdateWaveforms();
-        }
-    }
 
     public MainViewModel()
     {
@@ -164,7 +118,27 @@ public class MainViewModel : ViewModelBase
         var result = await dlg.ShowAsync(new Window());
         if (result != null && result.Length > 0)
         {
-            string fileName = result[0];
+            var fileName = result[0];
+
+            if (Path.GetExtension(fileName).ToLower() == ".csv")
+            {
+                var debug = new CsvWaveformSource(fileName);
+                debug.RunSetupAsync().Wait();
+                Console.WriteLine($"Loaded {debug.ChannelCount} waveforms from CSV");
+                debug.ProcessChannelData(0, 0, float.PositiveInfinity, (span, in metadata) =>
+                {
+                    Console.WriteLine($"Received {span.Length} points from CSV");
+                    // Тут можна конвертувати span в double[] і створювати Waveform
+
+                    // запихуємо спан у масив бо ми говнокодери
+                    float[] floats = span.ToArray();
+                    GodObject.ChannelDataReady = () => floats;
+                    GodObject.WaveMetadata = metadata;
+                });
+                //InitializeChannels();
+                return;
+            }
+
             IWaveformLoader loader = Path.GetExtension(fileName).ToLower() switch
             {
                 ".bin" => new RigolBinLoader(),
@@ -180,13 +154,13 @@ public class MainViewModel : ViewModelBase
     private Waveform CreateSineWave(string name, double amplitude, double frequency,
                                    double phase, Color color)
     {
-        int points = 1000;
-        double[] timeData = new double[points];
-        double[] analogData = new double[points];
+        var points = 1000;
+        var timeData = new double[points];
+        var analogData = new double[points];
 
-        for (int i = 0; i < points; i++)
+        for (var i = 0; i < points; i++)
         {
-            double t = i / (double)points * 0.01; // 10ms time window
+            var t = i / (double)points * 0.01; // 10ms time window
             timeData[i] = t;
             analogData[i] = amplitude * Math.Sin(2 * Math.PI * frequency * t + phase);
         }

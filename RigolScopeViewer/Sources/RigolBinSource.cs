@@ -5,12 +5,28 @@ using Avalonia.Media;
 using System.IO;
 using System.Linq;
 using System.Text;
+using RigolScopeViewer.Interfaces;
+using System.Numerics;
 
 namespace RigolScopeViewer.Services;
 
-public class RigolBinLoader : IWaveformLoader
+public class RigolBinSource : IWaveformSource
 {
-    public List<Waveform> Load(string fileName)
+    public int ChannelCount => throw new NotImplementedException();
+
+    public event EventHandler? DataReady;
+
+    public void Dispose()
+    {
+        throw new NotImplementedException();
+    }
+
+    public WaveformMetadata GetMetadata(int channelIndex)
+    {
+        throw new NotImplementedException();
+    }
+
+    private List<Waveform> Load(string fileName)
     {
         var waveforms = new List<Waveform>();
         using var stream = File.OpenRead(fileName);
@@ -96,6 +112,21 @@ public class RigolBinLoader : IWaveformLoader
         return waveforms;
     }
 
+    public void ProcessChannelData(int channelIndex, double startTime, double endTime, DataProcessor processor)
+    {
+        throw new NotImplementedException();
+    }
+
+    public void Start()
+    {
+        throw new NotImplementedException();
+    }
+
+    public void Stop()
+    {
+        throw new NotImplementedException();
+    }
+
     private Color GetChannelColor(int index)
     {
         return index switch
@@ -108,5 +139,15 @@ public class RigolBinLoader : IWaveformLoader
             5 => Colors.Orange,
             _ => Colors.White
         };
+    }
+
+    WaveformMetadata IWaveformSource.GetMetadata(int channelIndex)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Vector2 GetFitScreenTime(int channelIndex)
+    {
+        throw new NotImplementedException();
     }
 }

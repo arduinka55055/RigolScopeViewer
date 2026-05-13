@@ -167,9 +167,9 @@ namespace RigolScopeViewer
             _autoConverting = true;
             try
             {
-                double currentDisplayValue = (double)(NumericBox.Value ?? 0);
-                double baseValue = currentDisplayValue * _currentPrefix.Multiplier;
-                double absBaseValue = Math.Abs(baseValue);
+                var currentDisplayValue = (double)(NumericBox.Value ?? 0);
+                var baseValue = currentDisplayValue * _currentPrefix.Multiplier;
+                var absBaseValue = Math.Abs(baseValue);
 
                 if (absBaseValue == 0)
                 {
@@ -178,13 +178,13 @@ namespace RigolScopeViewer
                 }
 
                 // Find the best prefix for the current base value
-                UnitPrefix bestPrefix = _currentPrefix;
-                bool changed = false;
+                var bestPrefix = _currentPrefix;
+                var changed = false;
 
                 // Find the prefix where the normalized value is between 1 and 1000
                 foreach (var prefix in Prefixes.OrderByDescending(p => p.Multiplier))
                 {
-                    double normalizedValue = absBaseValue / prefix.Multiplier;
+                    var normalizedValue = absBaseValue / prefix.Multiplier;
 
                     if (normalizedValue >= 1 && normalizedValue < 1000)
                     {
@@ -204,7 +204,7 @@ namespace RigolScopeViewer
                     UnitComboBox.SelectedIndex = Prefixes.IndexOf(bestPrefix);
 
                     // Calculate new display value: baseValue / newMultiplier
-                    double newDisplayValue = baseValue / bestPrefix.Multiplier;
+                    var newDisplayValue = baseValue / bestPrefix.Multiplier;
                     NumericBox.Value = (decimal)newDisplayValue;
 
                     // BaseValue remains the same (baseValue doesn't change)
@@ -228,7 +228,7 @@ namespace RigolScopeViewer
 
         private void StepValue(bool up)
         {
-            double currentValue = (double)(NumericBox.Value ?? 0);
+            var currentValue = (double)(NumericBox.Value ?? 0);
             double newValue = 0;
 
             if (IncrementType == IncrementType.Step)
@@ -252,10 +252,10 @@ namespace RigolScopeViewer
 
         private double StepLinear(double currentValue, bool up)
         {
-            double step = Step / 10;
+            var step = Step / 10;
             if (step <= 0) step = 1; // Ensure positive step
 
-            double newValue = currentValue;
+            var newValue = currentValue;
 
             if (up)
             {
@@ -283,17 +283,17 @@ namespace RigolScopeViewer
         {
             if (value == 0) return up ? 1 : -1;
 
-            bool negative = value < 0;
-            double absValue = Math.Abs(value);
+            var negative = value < 0;
+            var absValue = Math.Abs(value);
 
             // Handle very small values
             if (absValue < 1e-12) return up ? 1e-12 : -1e-12;
 
-            int exponent = (int)Math.Floor(Math.Log10(absValue));
-            double stepFactor = Math.Pow(10, exponent);
+            var exponent = (int)Math.Floor(Math.Log10(absValue));
+            var stepFactor = Math.Pow(10, exponent);
 
             double[] steps = { 1 * stepFactor, 2 * stepFactor, 5 * stepFactor };
-            double nextValue = absValue;
+            var nextValue = absValue;
 
             if (up)
             {
@@ -310,7 +310,7 @@ namespace RigolScopeViewer
                 else
                 {
                     // Handle wrap-around to smaller magnitude
-                    double smallerFactor = Math.Pow(10, exponent - 1);
+                    var smallerFactor = Math.Pow(10, exponent - 1);
                     nextValue = 5 * smallerFactor;
 
                     // Ensure we don't go below minimum
@@ -350,15 +350,9 @@ namespace RigolScopeViewer
         }
     }
 
-    public class UnitPrefix
+    public class UnitPrefix(string prefix, double multiplier)
     {
-        public string Prefix { get; }
-        public double Multiplier { get; }
-
-        public UnitPrefix(string prefix, double multiplier)
-        {
-            Prefix = prefix;
-            Multiplier = multiplier;
-        }
+        public string Prefix { get; } = prefix;
+        public double Multiplier { get; } = multiplier;
     }
 }

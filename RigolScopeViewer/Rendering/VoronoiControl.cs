@@ -42,18 +42,18 @@ public class VoronoiControl : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        
+
         var point = e.GetCurrentPoint(this);
-        
+
         // Починаємо тягнути тільки якщо натиснута ліва кнопка
         if (point.Properties.IsLeftButtonPressed)
         {
             _isDragging = true;
             _lastMousePosition = point.Position;
-            
+
             // "Захоплюємо" мишу. Навіть якщо курсор вийде за межі контрола,
             // ми все одно будемо отримувати події руху.
-            e.Pointer.Capture(this); 
+            e.Pointer.Capture(this);
         }
     }
 
@@ -64,20 +64,20 @@ public class VoronoiControl : Control
         if (_isDragging && _lastMousePosition.HasValue)
         {
             var currentPosition = e.GetPosition(this);
-            
+
             // Рахуємо, на скільки пікселів зсунулась миша
             var deltaX = currentPosition.X - _lastMousePosition.Value.X;
             var deltaY = currentPosition.Y - _lastMousePosition.Value.Y;
 
             // Додаємо зсув до нашого глобального панорамування
-            _panX += deltaX; 
+            _panX += deltaX;
             _panY += deltaY;
 
             // Оновлюємо останню позицію
             _lastMousePosition = currentPosition;
 
             // КАЖЕМО AVALONIA ПЕРЕМАЛЮВАТИ КАДР!
-            InvalidateVisual(); 
+            InvalidateVisual();
         }
     }
 
@@ -105,7 +105,7 @@ public class VoronoiControl : Control
 
         // e.Delta.Y > 0 означає скрол вгору (зум in)
         // e.Delta.Y < 0 означає скрол вниз (зум out)
-        double zoomFactor = 1.15; // Крок зуму 15%
+        var zoomFactor = 1.15; // Крок зуму 15%
 
         if (e.Delta.Y > 0)
         {

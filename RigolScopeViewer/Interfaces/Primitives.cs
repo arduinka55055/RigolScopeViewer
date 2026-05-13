@@ -5,7 +5,7 @@ public readonly struct SignalPoint
 {
     public readonly double Time;
     public readonly float Voltage;
-    
+
     public SignalPoint(double time, float voltage) => (Time, Voltage) = (time, voltage);
 }
 

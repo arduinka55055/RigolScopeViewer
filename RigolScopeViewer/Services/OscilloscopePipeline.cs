@@ -1,42 +1,39 @@
-using System;
+﻿using System;
 using System.Buffers;
+using RigolScopeViewer.Models;
 
-public class OscilloscopePipeline
+namespace RigolScopeViewer.Services;
+
+public class OscilloscopePipeline(IResampler<ColumnStats> resampler)
 {
-    private readonly IResampler<ColumnStats> _resampler;
-
-    // Отримуємо через DI
-    public OscilloscopePipeline(IResampler<ColumnStats> resampler)
-    {
-        _resampler = resampler;
-    }
+    private readonly IResampler<ColumnStats> _resampler = resampler;
 
     // Викликається фоновим воркером, коли юзер зробив зум/пан, АБО прийшли нові дані
     public ColumnStats[] ProcessFrame(
-        float[] rawOscilloscopeData, 
-        WaveformMetadata metadata, 
+        float[] rawOscilloscopeData,
+        WaveformMetadata metadata,
         ViewportState viewport)
     {
         // 1. Беремо масив для результату з пулу (щоб не смітити в Garbage Collector)
         // ArrayPool може повернути масив БІЛЬШОГО розміру, ніж треба!
-        ColumnStats[] rentedArray = ArrayPool<ColumnStats>.Shared.Rent(viewport.ScreenWidthPx);
-        
+        var rentedArray = ArrayPool<ColumnStats>.Shared.Rent(viewport.ScreenWidthPx);
+
         try
         {
             // 2. Створюємо Span РІВНО того розміру, який потрібен (наприклад, 1080)
-            Span<ColumnStats> destinationSpan = rentedArray.AsSpan(0, viewport.ScreenWidthPx);
-            
+            var destinationSpan = rentedArray.AsSpan(0, viewport.ScreenWidthPx);
+
             // 3. Згодовуємо дані нашому швидкому Resampler-у
             _resampler.Resample(
-                rawOscilloscopeData, 
-                metadata,  
-                viewport.TimeStart, 
-                viewport.TimeEnd, 
+                rawOscilloscopeData,
+                metadata,
+                viewport.TimeStart,
+                viewport.TimeEnd,
                 destinationSpan);
 
             // 4. Повертаємо масив (ВАЖЛИВО: Той, хто приймає цей масив, 
             // має потім повернути його назад у пул: ArrayPool.Shared.Return())
-            return rentedArray; 
+            return rentedArray;
         }
         catch
         {

@@ -1,61 +1,47 @@
-﻿using RigolScopeViewer.Models;
+using CommunityToolkit.Mvvm.ComponentModel;
+using RigolScopeViewer.Models;
 using System;
+using System.ComponentModel;
 
 namespace RigolScopeViewer.ViewModels;
 
-public class ChannelViewModel : ViewModelBase
+public partial class ChannelViewModel(Waveform waveform, Action updateCallback) : ViewModelBase
 {
-    private readonly Waveform _waveform;
-    private readonly Action _updateCallback;
+    public string Name => waveform.Name;
 
-    public string Name => _waveform.Name;
     public bool IsVisible
     {
-        get => _waveform.IsVisible;
-        set
-        {
-            _waveform.IsVisible = value;
-            _updateCallback?.Invoke();
-            OnPropertyChanged();
-        }
+        get => waveform.IsVisible;
+        set => SetProperty(waveform.IsVisible, value, waveform, (w, v) => w.IsVisible = v);
     }
 
     public double Scale
     {
-        get => _waveform.Scale;
-        set
-        {
-            _waveform.Scale = value;
-            _updateCallback?.Invoke();
-            OnPropertyChanged();
-        }
+        get => waveform.Scale;
+        set => SetProperty(waveform.Scale, value, waveform, (w, v) => w.Scale = v);
     }
 
     public double VoltageOffset
     {
-        get => _waveform.VoltageOffset;
-        set
-        {
-            _waveform.VoltageOffset = value;
-            _updateCallback?.Invoke();
-            OnPropertyChanged();
-        }
+        get => waveform.VoltageOffset;
+        set => SetProperty(waveform.VoltageOffset, value, waveform, (w, v) => w.VoltageOffset = v);
     }
 
     public double TimeOffset
     {
-        get => _waveform.TimeOffset;
-        set
-        {
-            _waveform.TimeOffset = value;
-            _updateCallback?.Invoke();
-            OnPropertyChanged();
-        }
+        get => waveform.TimeOffset;
+        set => SetProperty(waveform.TimeOffset, value, waveform, (w, v) => w.TimeOffset = v);
     }
 
-    public ChannelViewModel(Waveform waveform, Action updateCallback)
+    // Override OnPropertyChanged ONLY to handle your global callback
+    protected override void OnPropertyChanged(PropertyChangedEventArgs e)
     {
-        _waveform = waveform;
-        _updateCallback = updateCallback;
+        base.OnPropertyChanged(e);
+
+        // Ignore the "Name" property since it's read-only and doesn't update the model
+        if (e.PropertyName != nameof(Name))
+        {
+            updateCallback?.Invoke();
+        }
     }
 }

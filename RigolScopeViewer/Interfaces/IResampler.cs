@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using RigolScopeViewer.Models;
 
 /// <summary>
 /// TOutput має бути unmanaged (blittable), щоб ідеально лягати в пам'ять відеокарти

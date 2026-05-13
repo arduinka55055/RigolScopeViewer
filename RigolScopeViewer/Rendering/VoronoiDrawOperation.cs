@@ -5,7 +5,7 @@ using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
 using SkiaSharp;
 
-public class VoronoiDrawOperation : ICustomDrawOperation
+public class VoronoiDrawOperation(Rect bounds, double time) : ICustomDrawOperation
 {
     private static readonly SKRuntimeEffect VoronoiEffect = SKRuntimeEffect.CreateShader(
         @"// Voronoi + Triangle Mask Shader
@@ -41,16 +41,10 @@ half4 main(vec2 fragCoord) {
     return half4(vec3(1.0 - minDist) * vec3(0.2, 0.5, 0.9), 1.0);
 }", out var errors);
 
-    public Rect Bounds { get; }
-    public double Time { get; }
+    public Rect Bounds { get; } = bounds;
+    public double Time { get; } = time;
 
     Rect ICustomDrawOperation.Bounds => Bounds;
-
-    public VoronoiDrawOperation(Rect bounds, double time)
-    {
-        Bounds = bounds;
-        Time = time;
-    }
 
     public void Render(ImmediateDrawingContext context)
     {
@@ -89,8 +83,8 @@ half4 main(vec2 fragCoord) {
 
             // 3. DEFINE THE TRIANGLE (Local to the control)
             using var path = new SKPath();
-            float w = (float)Bounds.Width;
-            float h = (float)Bounds.Height;
+            var w = (float)Bounds.Width;
+            var h = (float)Bounds.Height;
 
             path.MoveTo(w / 2, 0);       // Top Middle
             path.LineTo(0, h);           // Bottom Left

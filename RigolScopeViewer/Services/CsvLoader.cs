@@ -18,34 +18,34 @@ public class CsvLoader : IWaveformLoader
 
         // Parse header
         var headers = lines[0].Split(',').Select(h => h.Trim()).ToArray();
-        int numChannels = headers.Length - 1; // first column is time
+        var numChannels = headers.Length - 1; // first column is time
 
         // Parse data
-        int numPoints = lines.Length - 1;
-        double[] timeData = new double[numPoints];
-        double[][] channelData = new double[numChannels][];
+        var numPoints = lines.Length - 1;
+        var timeData = new double[numPoints];
+        var channelData = new double[numChannels][];
 
-        for (int i = 0; i < numChannels; i++)
+        for (var i = 0; i < numChannels; i++)
             channelData[i] = new double[numPoints];
 
-        for (int i = 1; i < lines.Length; i++)
+        for (var i = 1; i < lines.Length; i++)
         {
             var values = lines[i].Split(',')
-                .Select(v => double.TryParse(v, out double result) ? result : 0)
+                .Select(v => double.TryParse(v, out var result) ? result : 0)
                 .ToArray();
 
             if (values.Length < headers.Length)
                 continue;
 
             timeData[i - 1] = values[0];
-            for (int j = 0; j < numChannels; j++)
+            for (var j = 0; j < numChannels; j++)
             {
                 channelData[j][i - 1] = values[j + 1];
             }
         }
 
         // Create waveforms
-        for (int i = 0; i < numChannels; i++)
+        for (var i = 0; i < numChannels; i++)
         {
             waveforms.Add(new Waveform
             {
