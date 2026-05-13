@@ -6,12 +6,14 @@ using System.Text;
 using System.Threading.Tasks;
 using RigolScopeViewer.Interfaces;
 using RigolScopeViewer.Models;
+using Microsoft.Extensions.Logging;
 
 namespace RigolScopeViewer.Sources;
 
-public class RigolBinSource(string filePath) : IWaveformSource
+public class RigolBinSource : IWaveformSource
 {
-    private readonly string _filePath = filePath;
+    private readonly string _filePath;
+    private readonly ILogger<RigolBinSource>? _logger;
 
     // Всі дані лежать тут. 1-й вимір - канал, 2-й вимір - точки
     private float[][]? _channelData;
@@ -19,6 +21,13 @@ public class RigolBinSource(string filePath) : IWaveformSource
 
     public event EventHandler? DataReady;
     public int ChannelCount => _channelData?.Length ?? 0;
+
+    public RigolBinSource(string filePath, ILogger<RigolBinSource>? logger = null)
+    {
+        _filePath = filePath;
+        _logger = logger;
+        _logger?.LogInformation("RigolBinSource initialized for file: {FilePath}", filePath);
+    }
 
     public async Task<bool> RunSetupAsync()
     {

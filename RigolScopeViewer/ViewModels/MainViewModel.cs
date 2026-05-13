@@ -13,6 +13,7 @@ using System.Windows.Input;
 using RigolScopeViewer.Sources.CSV;
 using RigolScopeViewer.Sources;
 using RigolScopeViewer.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace RigolScopeViewer.ViewModels;
 
@@ -24,7 +25,12 @@ public class MainViewModel : ViewModelBase
     private double _triggerLevel;
     private bool _showTrigger = true;
 
-    public ObservableCollection<ChannelViewModel> Channels { get; } = new();
+    private readonly ILogger<MainViewModel>? _logger;
+    private readonly IConfigManager? _configManager;
+    private readonly IResampler<ColumnStats>? _resampler;
+    private readonly ILoggerFactory? _loggerFactory;
+
+    public ObservableCollection<ChannelViewModel> Channels { get; } = [];
     public ICommand OpenCommand { get; }
     public ICommand ZoomInCommand { get; }
     public ICommand ZoomOutCommand { get; }
@@ -76,9 +82,23 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-
-    public MainViewModel()
+    /// <summary>
+    /// Constructor for dependency injection.
+    /// Parameters can be null for backward compatibility/testing.
+    /// </summary>
+    public MainViewModel(
+        ILogger<MainViewModel>? logger = null,
+        IConfigManager? configManager = null,
+        IResampler<ColumnStats>? resampler = null,
+        ILoggerFactory? loggerFactory = null)
     {
+        _logger = logger;
+        _configManager = configManager;
+        _resampler = resampler;
+        _loggerFactory = loggerFactory;
+
+        _logger?.LogInformation("MainViewModel initialized");
+
         OpenCommand = new RelayCommand(OpenFile);
         ZoomInCommand = new RelayCommand(() => TimePerDivision *= 0.8);
         ZoomOutCommand = new RelayCommand(() => TimePerDivision *= 1.25);
@@ -90,6 +110,7 @@ public class MainViewModel : ViewModelBase
     private void InitializeChannels()
     {
         Channels.Clear();
+        _logger?.LogDebug("Channels cleared and reinitialized");
 
         UpdateWaveforms();
     }
@@ -97,12 +118,15 @@ public class MainViewModel : ViewModelBase
     private void UpdateWaveforms()
     {
         // Notify UI to redraw
+        _logger?.LogDebug("UpdateWaveforms called with TimePerDivision={TimePerDivision}", _timePerDivision);
         //OnPropertyChanged(nameof(Waveforms));
     }
 
 
     private async void OpenFile()
     {
+        _logger?.LogInformation("OpenFile dialog initiated");
+
         var dlg = new OpenFileDialog();
         dlg.Filters.Add(new FileDialogFilter
         {
@@ -114,29 +138,50 @@ public class MainViewModel : ViewModelBase
         if (result != null && result.Length > 0)
         {
             var fileName = result[0];
+            _logger?.LogInformation("File selected: {FileName}", fileName);
 
-            IWaveformSource loader = Path.GetExtension(fileName).ToLower() switch
+            try
             {
-                ".bin" => new RigolBinSource(fileName),
-                ".csv" => new CsvWaveformSource(fileName),
-                _ => throw new NotSupportedException("Unsupported file format")
-            };
-            await loader.RunSetupAsync();
-            Console.WriteLine($"Loaded {loader.ChannelCount} waveforms");
-            loader.ProcessChannelData(0, 0, float.PositiveInfinity, (span, in metadata) =>
+                var binLogger = _loggerFactory?.CreateLogger<RigolBinSource>();
+                var csvLogger = _loggerFactory?.CreateLogger<CsvWaveformSource>();
+
+                IWaveformSource loader = Path.GetExtension(fileName).ToLower() switch
+                {
+                    ".bin" => new RigolBinSource(fileName, binLogger),
+                    ".csv" => new CsvWaveformSource(fileName, _configManager ?? throw new InvalidOperationException("ConfigManager not available"), csvLogger),
+                    _ => throw new NotSupportedException("Unsupported file format")
+                };
+
+                _logger?.LogDebug("Created waveform loader for file: {FileName}", fileName);
+
+                await loader.RunSetupAsync();
+                _logger?.LogInformation("Loaded {ChannelCount} waveforms", loader.ChannelCount);
+
+                loader.ProcessChannelData(0, 0, float.PositiveInfinity, (span, in metadata) =>
+                {
+                    _logger?.LogDebug("Received {PointCount} points from loader", span.Length);
+                    // Тут можна конвертувати span в double[] і створювати Waveform
+
+                    // запихуємо спан у масив бо ми говнокодери
+                    float[] floats = span.ToArray();
+                    GodObject.ChannelDataReady = () => floats;
+                    GodObject.WaveMetadata = metadata;
+                });
+
+                //_waveforms = loader.Load(fileName);
+                InitializeChannels();
+            }
+            catch (Exception ex)
             {
-                Console.WriteLine($"Received {span.Length} points from loader");
-                // Тут можна конвертувати span в double[] і створювати Waveform
-
-                // запихуємо спан у масив бо ми говнокодери
-                float[] floats = span.ToArray();
-                GodObject.ChannelDataReady = () => floats;
-                GodObject.WaveMetadata = metadata;
-            });
-
-            //_waveforms = loader.Load(fileName);
-            InitializeChannels();
+                _logger?.LogError(ex, "Error loading waveform file: {FileName}", fileName);
+                throw;
+            }
+        }
+        else
+        {
+            _logger?.LogDebug("File open dialog cancelled");
         }
     }
 
 }
+

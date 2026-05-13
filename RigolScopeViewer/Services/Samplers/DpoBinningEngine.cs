@@ -1,8 +1,19 @@
 ﻿using System;
+using Microsoft.Extensions.Logging;
 using RigolScopeViewer.Models;
+
+namespace RigolScopeViewer.Services.Samplers;
 
 public class DpoBinningEngine : IResampler<ColumnStats>
 {
+    private readonly ILogger<DpoBinningEngine>? _logger;
+
+    public DpoBinningEngine(ILogger<DpoBinningEngine>? logger = null)
+    {
+        _logger = logger;
+        _logger?.LogDebug("DpoBinningEngine initialized");
+    }
+
     public void Resample(
         ReadOnlySpan<float> sourceVoltages,
         in WaveformMetadata metadata,

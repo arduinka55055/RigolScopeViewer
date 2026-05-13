@@ -6,13 +6,16 @@ using System.Numerics;
 using System.Threading.Tasks;
 using RigolScopeViewer.Interfaces;
 using RigolScopeViewer.Models;
+using Microsoft.Extensions.Logging;
 
 namespace RigolScopeViewer.Sources.CSV;
 
-public class CsvWaveformSource(string filePath) : IWaveformSource
+public class CsvWaveformSource : IWaveformSource
 {
-    private readonly string _filePath = filePath;
-    private readonly CsvSourceConfig _config = ConfigManager.Load<CsvSourceConfig>("csv_config.json");
+    private readonly string _filePath;
+    private readonly IConfigManager _configManager;
+    private readonly ILogger<CsvWaveformSource>? _logger;
+    private CsvSourceConfig _config;
 
     // Всі дані лежать тут. 1-й вимір - канал, 2-й вимір - точки
     private float[][]? _channelData;
@@ -23,6 +26,15 @@ public class CsvWaveformSource(string filePath) : IWaveformSource
 
     public static bool SetupNeeded => true;
 
+    public CsvWaveformSource(string filePath, IConfigManager configManager, ILogger<CsvWaveformSource>? logger = null)
+    {
+        _filePath = filePath;
+        _configManager = configManager;
+        _logger = logger;
+        _config = _configManager.Load<CsvSourceConfig>("csv_config.json");
+        _logger?.LogInformation("CsvWaveformSource initialized for file: {FilePath}", filePath);
+    }
+
     public async Task<bool> RunSetupAsync()
     {
         // ТУТ МАЄ БУТИ ВИКЛИК AVALONIA ДІАЛОГУ
@@ -32,7 +44,8 @@ public class CsvWaveformSource(string filePath) : IWaveformSource
         // if (!result) return false;
 
         // Для симуляції припустимо, що юзер зберіг налаштування:
-        ConfigManager.Save(_config, "csv_config.json");
+        _configManager.Save(_config, "csv_config.json");
+        _logger?.LogDebug("CSV config saved");
 
         // Після налаштування парсимо файл
         ParseFile();
@@ -41,7 +54,13 @@ public class CsvWaveformSource(string filePath) : IWaveformSource
 
     private void ParseFile()
     {
-        if (!File.Exists(_filePath)) return;
+        if (!File.Exists(_filePath))
+        {
+            _logger?.LogWarning("CSV file not found: {FilePath}", _filePath);
+            return;
+        }
+
+        _logger?.LogDebug("Parsing CSV file: {FilePath}", _filePath);
 
         // Використовуємо списки як тимчасові буфери під час читання
         var tempBuffers = new List<List<float>>();

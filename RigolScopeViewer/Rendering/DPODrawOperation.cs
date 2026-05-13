@@ -5,6 +5,7 @@ using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
 using RigolScopeViewer;
 using RigolScopeViewer.Models;
+using RigolScopeViewer.Services.Samplers;
 using SkiaSharp;
 using System;
 using System.IO;

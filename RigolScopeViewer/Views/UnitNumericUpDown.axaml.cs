@@ -18,8 +18,8 @@ namespace RigolScopeViewer
     public partial class UnitNumericUpDown : UserControl
     {
         // Static list of SI prefixes
-        private static readonly List<UnitPrefix> Prefixes = new()
-        {
+        private static readonly List<UnitPrefix> Prefixes =
+        [
             new UnitPrefix("p", 1e-12),
             new UnitPrefix("n", 1e-9),
             new UnitPrefix("μ", 1e-6),
@@ -29,7 +29,7 @@ namespace RigolScopeViewer
             new UnitPrefix("M", 1e6),
             new UnitPrefix("G", 1e9),
             new UnitPrefix("T", 1e12)
-        };
+        ];
 
         // Avalonia properties
         public static readonly StyledProperty<double> BaseValueProperty =
