@@ -8,10 +8,12 @@
              VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
     
     <Grid>
-
-        
-        <local:VoronoiControl HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
-        
+        <!-- Магія тут: Прив'язуємо Дані та Команду -->
+        <local:GPUScopeControl 
+            HorizontalAlignment="Stretch" 
+            VerticalAlignment="Stretch" 
+            FrameData="{Binding CurrentFrame}"
+            UpdateViewportCommand="{Binding ChangeViewportCommand}" />
     </Grid>
     
 </UserControl>

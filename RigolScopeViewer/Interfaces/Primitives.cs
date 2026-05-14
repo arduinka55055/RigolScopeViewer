@@ -1,4 +1,4 @@
-// 1. Сирі дані з VISA/CSV
+﻿// 1. Сирі дані з VISA/CSV
 using System;
 
 public readonly struct SignalPoint
@@ -22,4 +22,4 @@ public readonly struct ColumnStats
 }
 
 // 3. Стан вікна перегляду (Viewport)
-public record ViewportState(float TimeStart, float TimeEnd, float VoltageMin, float VoltageMax, int ScreenWidthPx);
+public record ViewportState(double TimeStart, double TimeEnd, double VoltageMin, double VoltageMax, int ScreenWidthPx);

@@ -8,14 +8,14 @@ namespace RigolScopeViewer;
 
 public partial class MainWindow : Window
 {
-    public MainWindow()
+    public MainWindow(MainViewModel viewModel)
     {
         InitializeComponent();
 #if DEBUG
         this.AttachDevTools();
 #endif
 
-        DataContext = new MainViewModel();
+        DataContext = viewModel;
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -34,17 +34,6 @@ public partial class MainWindow : Window
                 {
                     // Find the oscilloscope control and update it
                     var scopeControl = this.FindControl<OscilloscopeControlDebug>("OscilloscopeView");
-                    // scopeControl?.RenderWaveforms(
-                    //     vm.Waveforms,
-                    //     vm.TimePerDivision,
-                    //     vm.TimeOffset,
-                    //     vm.TriggerLevel,
-                    //     vm.ShowTrigger,
-                    //     vm.CursorX1,
-                    //     vm.CursorX2,
-                    //     vm.CursorY1,
-                    //     vm.CursorY2
-                    // );
                 }
             };
         }

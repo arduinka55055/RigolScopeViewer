@@ -33,8 +33,8 @@ public static class DependencyInjectionExtensions
         // Add resampling/binning engine
         services.AddSingleton<IResampler<ColumnStats>, DpoBinningEngine>();
 
-        // Add ViewModels
-        services.AddSingleton<MainViewModel>();
+        // Реєструємо пайплайн
+        services.AddTransient<IOscilloscopePipeline, OscilloscopePipeline>();
 
         return services;
     }

@@ -14,112 +14,99 @@ using RigolScopeViewer.Sources.CSV;
 using RigolScopeViewer.Sources;
 using RigolScopeViewer.Interfaces;
 using Microsoft.Extensions.Logging;
+using CommunityToolkit.Mvvm.ComponentModel;
+using System.Threading.Tasks;
 
 namespace RigolScopeViewer.ViewModels;
 
 
-public class MainViewModel : ViewModelBase
+public partial class MainViewModel : ViewModelBase
 {
+    [ObservableProperty]
     private double _timePerDivision = 0.001; // 1ms/div
+
+    [ObservableProperty]
     private double _timeOffset;
+
+    [ObservableProperty]
     private double _triggerLevel;
+
+    [ObservableProperty]
     private bool _showTrigger = true;
 
-    private readonly ILogger<MainViewModel>? _logger;
-    private readonly IConfigManager? _configManager;
-    private readonly IResampler<ColumnStats>? _resampler;
-    private readonly ILoggerFactory? _loggerFactory;
+    [ObservableProperty]
+    private int _screenWidthPx = 800; // Default fallback width
+
+    private readonly ILogger<MainViewModel> _logger;
+    private readonly IConfigManager _configManager;
+    private readonly ILoggerFactory _loggerFactory;
+
+    private readonly IOscilloscopePipeline _pipeline;
+    private IWaveformSource? _currentLoader;
+
+    [ObservableProperty]
+    private bool _isBusy; // Прив'яжи це до <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+
+    [ObservableProperty]
+    private RenderFrame? _currentFrame; // Дані для нашого рендера
 
     public ObservableCollection<ChannelViewModel> Channels { get; } = [];
     public ICommand OpenCommand { get; }
     public ICommand ZoomInCommand { get; }
     public ICommand ZoomOutCommand { get; }
 
-    public double TimePerDivision
-    {
-        get => _timePerDivision;
-        set
-        {
-            if (value > 0)
-            {
-                _timePerDivision = value;
-                OnPropertyChanged();
-                UpdateWaveforms();
-            }
-        }
-    }
-
-    public double TimeOffset
-    {
-        get => _timeOffset;
-        set
-        {
-            _timeOffset = value;
-            OnPropertyChanged();
-            UpdateWaveforms();
-        }
-    }
-
-    public double TriggerLevel
-    {
-        get => _triggerLevel;
-        set
-        {
-            _triggerLevel = value;
-            OnPropertyChanged();
-            UpdateWaveforms();
-        }
-    }
-
-    public bool ShowTrigger
-    {
-        get => _showTrigger;
-        set
-        {
-            _showTrigger = value;
-            OnPropertyChanged();
-            UpdateWaveforms();
-        }
-    }
-
     /// <summary>
     /// Constructor for dependency injection.
     /// Parameters can be null for backward compatibility/testing.
     /// </summary>
     public MainViewModel(
-        ILogger<MainViewModel>? logger = null,
-        IConfigManager? configManager = null,
-        IResampler<ColumnStats>? resampler = null,
-        ILoggerFactory? loggerFactory = null)
+        ILogger<MainViewModel> logger,
+        IConfigManager configManager,
+        ILoggerFactory loggerFactory,
+        IOscilloscopePipeline pipeline)
     {
         _logger = logger;
         _configManager = configManager;
-        _resampler = resampler;
+        _pipeline = pipeline;
         _loggerFactory = loggerFactory;
 
-        _logger?.LogInformation("MainViewModel initialized");
+        _logger.LogInformation("MainViewModel initialized");
 
         OpenCommand = new RelayCommand(OpenFile);
         ZoomInCommand = new RelayCommand(() => TimePerDivision *= 0.8);
         ZoomOutCommand = new RelayCommand(() => TimePerDivision *= 1.25);
 
-        // Demo data for testing
-        InitializeChannels();
     }
 
-    private void InitializeChannels()
+    // Команда, яку викликає GPUScopeControl при відпусканні миші або скролі
+    [RelayCommand]
+    private async Task ChangeViewport(ViewportChangeParams args)
     {
-        Channels.Clear();
-        _logger?.LogDebug("Channels cleared and reinitialized");
+        // 1. Оновлюємо час на основі зуму (ZoomIn = менше секунд на екран)
+        if (args.ZoomFactor != 1.0)
+        {
+            // Беремо твій поточний TimePerDivision і множимо
+            TimePerDivision *= args.ZoomFactor;
+        }
 
-        UpdateWaveforms();
-    }
+        // 2. Оновлюємо зміщення на основі панорамування (Pan)
+        if (args.PanPercent != 0.0)
+        {
+            // Загальний час на екрані = TimePerDivision * 10 (якщо 10 клітинок)
+            double totalScreenTime = TimePerDivision * 10.0;
 
-    private void UpdateWaveforms()
-    {
-        // Notify UI to redraw
-        _logger?.LogDebug("UpdateWaveforms called with TimePerDivision={TimePerDivision}", _timePerDivision);
-        //OnPropertyChanged(nameof(Waveforms));
+            // Зміщуємо стартовий час на відповідну кількість секунд
+            TimeOffset += totalScreenTime * args.PanPercent;
+        }
+
+        // 3. Оноалюємо ширину екрану в пікселях (це потрібно для правильного ресемплінгу)
+        if (args.ScreenWidthPx > 0)
+        {
+            ScreenWidthPx = args.ScreenWidthPx;
+        }
+
+        // 4. Запитуємо новий кадр (твоя функція з Task.Run та IResampler)
+        await RequestNewFrameAsync();
     }
 
 
@@ -145,7 +132,7 @@ public class MainViewModel : ViewModelBase
                 var binLogger = _loggerFactory?.CreateLogger<RigolBinSource>();
                 var csvLogger = _loggerFactory?.CreateLogger<CsvWaveformSource>();
 
-                IWaveformSource loader = Path.GetExtension(fileName).ToLower() switch
+                _currentLoader = Path.GetExtension(fileName).ToLower() switch
                 {
                     ".bin" => new RigolBinSource(fileName, binLogger),
                     ".csv" => new CsvWaveformSource(fileName, _configManager ?? throw new InvalidOperationException("ConfigManager not available"), csvLogger),
@@ -154,22 +141,10 @@ public class MainViewModel : ViewModelBase
 
                 _logger?.LogDebug("Created waveform loader for file: {FileName}", fileName);
 
-                await loader.RunSetupAsync();
-                _logger?.LogInformation("Loaded {ChannelCount} waveforms", loader.ChannelCount);
-
-                loader.ProcessChannelData(0, 0, float.PositiveInfinity, (span, in metadata) =>
-                {
-                    _logger?.LogDebug("Received {PointCount} points from loader", span.Length);
-                    // Тут можна конвертувати span в double[] і створювати Waveform
-
-                    // запихуємо спан у масив бо ми говнокодери
-                    float[] floats = span.ToArray();
-                    GodObject.ChannelDataReady = () => floats;
-                    GodObject.WaveMetadata = metadata;
-                });
-
+                await _currentLoader.RunSetupAsync();
+                _logger?.LogInformation("Loaded {ChannelCount} waveforms", _currentLoader.ChannelCount);
+                await RequestNewFrameAsync();
                 //_waveforms = loader.Load(fileName);
-                InitializeChannels();
             }
             catch (Exception ex)
             {
@@ -183,5 +158,44 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+
+
+    private async Task RequestNewFrameAsync()
+    {
+        if (_currentLoader == null) return;
+
+        IsBusy = true; // Показуємо загрузку
+
+        // Створюємо Viewport на основі твоїх налаштувань UI
+        var viewport = new ViewportState(
+            TimeStart: 0,
+            TimeEnd: TimeOffset + (TimePerDivision * 10), // Наприклад, 10 клітинок на екрані
+            VoltageMin: -5, // Це можна брати з налаштувань каналу
+            VoltageMax: 5,  // Це можна брати з налаштувань
+            ScreenWidthPx: ScreenWidthPx // Це можна брати з ActualWidth контрола
+        );
+
+        // ВАЖЛИВО: Span не може перетинати потоки. Тому ми запускаємо Task.Run,
+        // всередині якого викликаємо лоадер. Лоадер дає Span, ми віддаємо його в пайплайн,
+        // і результат (RenderFrame) повертаємо в UI потік. ZERO COPY!
+        var newFrame = await Task.Run(() =>
+        {
+            RenderFrame? result = null;
+            _currentLoader.ProcessChannelData(0, viewport.TimeStart, viewport.TimeEnd, (span, in metadata) =>
+            {
+                result = _pipeline.ProcessFrame(span, metadata, viewport);
+            });
+
+            return result;
+        });
+
+        // Видаляємо старий кадр з пам'яті (повертаємо масив у пул)
+        CurrentFrame?.Dispose();
+
+        // Встановлюємо новий кадр (це затригерить Avalonia малювати)
+        CurrentFrame = newFrame;
+
+        IsBusy = false; // Вимикаємо загрузку
+    }
 }
 

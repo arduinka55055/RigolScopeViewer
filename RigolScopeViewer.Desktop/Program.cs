@@ -1,7 +1,5 @@
 ﻿using System;
 using Avalonia;
-using Microsoft.Extensions.DependencyInjection;
-using RigolScopeViewer.Services;
 
 namespace RigolScopeViewer.Desktop;
 
@@ -13,14 +11,6 @@ class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        // Setup dependency injection
-        var services = new ServiceCollection();
-        services.AddRigolScopeViewerServices();
-        var serviceProvider = services.BuildServiceProvider();
-
-        // Set the service provider on the App before building
-        RigolScopeViewer.App.ServiceProvider = serviceProvider;
-
         BuildAvaloniaApp()
             .StartWithClassicDesktopLifetime(args);
     }

@@ -152,9 +152,16 @@ public class RigolBinSource : IWaveformSource
         startIndex = Math.Clamp(startIndex, 0, data.Length);
         endIndex = Math.Clamp(endIndex, startIndex, data.Length);
 
-        if (endIndex <= startIndex) return;
+        ReadOnlySpan<float> slice;
+        if (endIndex > startIndex)
+        {
 
-        ReadOnlySpan<float> slice = data.AsSpan(startIndex, endIndex - startIndex);
+            slice = data.AsSpan(startIndex, endIndex - startIndex);
+        }
+        else
+        {
+            slice = data.AsSpan();
+        }
 
         processor(slice, meta);
     }

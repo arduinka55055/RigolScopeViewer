@@ -3,8 +3,10 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
+using Microsoft.Extensions.Logging;
 using RigolScopeViewer;
 using RigolScopeViewer.Models;
+using RigolScopeViewer.Services;
 using RigolScopeViewer.Services.Samplers;
 using SkiaSharp;
 using System;
@@ -52,9 +54,15 @@ public class DpoDrawOperation : ICustomDrawOperation
     private static SKBitmap? _dataBitmap;
     private static int _cachedWidth;
 
-    public DpoDrawOperation(Rect bounds, double panX, double zoomX, float vMin, float vMax, float intensity)
+    private readonly RenderFrame _frame;
+
+    private readonly ILogger<DpoDrawOperation> _logger;
+
+    public DpoDrawOperation(ILogger<DpoDrawOperation> logger, Rect bounds, RenderFrame frame, double panX, double zoomX, float vMin, float vMax, float intensity)
     {
         Bounds = bounds;
+        _frame = frame;
+        _logger = logger;
         PanX = panX;
         ZoomX = zoomX;
         VoltsMin = vMin;
@@ -88,7 +96,7 @@ public class DpoDrawOperation : ICustomDrawOperation
         EnsureBitmapSize(width);
 
         // 2. Симуляція заповнення даних (У тебе це робитиме Background Worker)
-        UpdateMockData(width);
+        UpdateBufferData();
 
         canvas.Save();
         canvas.Translate((float)Bounds.Left, (float)Bounds.Top);
@@ -145,31 +153,22 @@ public class DpoDrawOperation : ICustomDrawOperation
     }
 
     // Це просто для тесту, у реальному житті сюди прилітатиме масив від IBinningEngine
-    private void UpdateMockData(int width)
+    private void UpdateBufferData()
     {
         // Отримуємо прямий (безпечний) вказівник на пам'ять картинки
+        var sourceSpan = _frame.GetValidSpan();
+
+        // Отримуємо пам'ять текстури Skia
         var bytePtr = _dataBitmap!.GetPixelSpan();
-        var ptr = MemoryMarshal.Cast<byte, ColumnStats>(bytePtr);
+        var destSpan = MemoryMarshal.Cast<byte, ColumnStats>(bytePtr);
 
-        for (var i = 0; i < width; i++)
+        // БЛИСКАВИЧНЕ КОПІЮВАННЯ (На рівні C++, без циклів for!)
+        if (sourceSpan.Length > destSpan.Length)
         {
-            // Генеруємо синусоїду з "шумом"
-            var x = i / (float)width * MathF.PI * 4f;
-            var mean = MathF.Sin(x) * 1f + 0.5f;
-
-            // Робимо фронти розмитими (stdDev більше), а полиці чіткими
-            var stdDev = 0.05f + MathF.Abs(MathF.Cos(x)) * 0.3f;
-
-            // Записуємо напряму в пам'ять відео-текстури (0 allocations!)
-            ptr[i] = new ColumnStats(mean, stdDev);
+            _logger.LogWarning("Warning: Source data is larger than texture capacity. Data will be truncated.");
+            sourceSpan = sourceSpan[..destSpan.Length];
         }
-
-        // use dpobinningengine (debug)
-        if (GodObject.ChannelDataReady == null) return;
-        var rawData = GodObject.ChannelDataReady();
-        var engine = new DpoBinningEngine();
-        var viewport = GodObject.WaveMetadata.FitScreenTime;
-        engine.Resample(rawData, GodObject.WaveMetadata, viewport.X, viewport.Y, ptr);
+        sourceSpan.CopyTo(destSpan);
 
     }
 
