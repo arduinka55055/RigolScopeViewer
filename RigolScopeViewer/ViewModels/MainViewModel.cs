@@ -143,6 +143,14 @@ public partial class MainViewModel : ViewModelBase
 
                 await _currentLoader.RunSetupAsync();
                 _logger?.LogInformation("Loaded {ChannelCount} waveforms", _currentLoader.ChannelCount);
+
+                Channels.Clear();
+                for (int i = 0; i < _currentLoader.ChannelCount; i++)
+                {
+                    var meta = _currentLoader.GetMetadata(i);
+                    Channels.Add(new ChannelViewModel(i, meta.ChannelName));
+                }
+
                 await RequestNewFrameAsync();
                 //_waveforms = loader.Load(fileName);
             }
@@ -167,33 +175,41 @@ public partial class MainViewModel : ViewModelBase
         IsBusy = true; // Показуємо загрузку
 
         // Створюємо Viewport на основі твоїх налаштувань UI
+        var timeEnd = TimeOffset + (TimePerDivision * 10); // Наприклад, 10 клітинок на екрані
         var viewport = new ViewportState(
-            TimeStart: 0,
-            TimeEnd: TimeOffset + (TimePerDivision * 10), // Наприклад, 10 клітинок на екрані
-            VoltageMin: -5, // Це можна брати з налаштувань каналу
-            VoltageMax: 5,  // Це можна брати з налаштувань
+            Time: new TimeRange(TimeOffset, timeEnd),
+            Voltage: new VoltageRange(-5f, 5f), // Це можна брати з налаштувань каналу
+            Pan: new ViewportPan(0, 0), // Pan is handled by GPU control now
+            Zoom: new ViewportZoom(1.0, 1.0), // Zoom is handled by GPU control now
             ScreenWidthPx: ScreenWidthPx // Це можна брати з ActualWidth контрола
         );
 
         // ВАЖЛИВО: Span не може перетинати потоки. Тому ми запускаємо Task.Run,
         // всередині якого викликаємо лоадер. Лоадер дає Span, ми віддаємо його в пайплайн,
         // і результат (RenderFrame) повертаємо в UI потік. ZERO COPY!
-        var newFrame = await Task.Run(() =>
-        {
-            RenderFrame? result = null;
-            _currentLoader.ProcessChannelData(0, viewport.TimeStart, viewport.TimeEnd, (span, in metadata) =>
-            {
-                result = _pipeline.ProcessFrame(span, metadata, viewport);
-            });
 
-            return result;
+        var newFrames = await Task.Run(() =>
+        {
+            var results = new RenderFrame?[Channels.Count];
+            for (int i = 0; i < Channels.Count; i++)
+            {
+                if (!Channels[i].IsVisible) continue;
+
+                RenderFrame? result = null;
+                _currentLoader.ProcessChannelData(Channels[i].Index, viewport.Time, (span, in metadata) =>
+                {
+                    result = _pipeline.ProcessFrame(span, metadata, viewport);
+                });
+                results[i] = result;
+            }
+            return results;
         });
 
-        // Видаляємо старий кадр з пам'яті (повертаємо масив у пул)
-        CurrentFrame?.Dispose();
-
-        // Встановлюємо новий кадр (це затригерить Avalonia малювати)
-        CurrentFrame = newFrame;
+        for (int i = 0; i < Channels.Count; i++)
+        {
+            Channels[i].CurrentFrame?.Dispose();
+            Channels[i].CurrentFrame = newFrames[i];
+        }
 
         IsBusy = false; // Вимикаємо загрузку
     }

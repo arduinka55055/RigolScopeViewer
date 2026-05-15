@@ -17,8 +17,11 @@ public interface IWaveformSource : IDisposable
 
     event EventHandler? DataReady;
 
+    //TODO: add TimeRange and VoltageRange
+
+
     // Запитуємо дані ДЛЯ КОНКРЕТНОГО КАНАЛУ
-    void ProcessChannelData(int channelIndex, double startTime, double endTime, DataProcessor processor);
+    void ProcessChannelData(int channelIndex, TimeRange timeRange, DataProcessor processor);
     void Start();
     void Stop();
     // Запускає налаштування джерела даних (наприклад, вибір файлу, підключення до приладу тощо)

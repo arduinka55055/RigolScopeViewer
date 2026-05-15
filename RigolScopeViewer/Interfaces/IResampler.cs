@@ -11,13 +11,11 @@ public interface IResampler<TOutput> where TOutput : unmanaged
     /// </summary>
     /// <param name="sourceVoltages">Сирі дані з осцилографа (вхід)</param>
     /// <param name="metadata">Часові характеристики сирих даних</param>
-    /// <param name="viewportStartTime">Лівий край екрану (у секундах)</param>
-    /// <param name="viewportEndTime">Правий край екрану (у секундах)</param>
+    /// <param name="timeRange">Time window to render (start and end in seconds)</param>
     /// <param name="destinationBins">Буфер для запису результату (його довжина визначає кількість пікселів/бінів)</param>
     void Resample(
         ReadOnlySpan<float> sourceVoltages,
         in WaveformMetadata metadata,
-        float viewportStartTime,
-        float viewportEndTime,
+        TimeRange timeRange,
         Span<TOutput> destinationBins);
 }

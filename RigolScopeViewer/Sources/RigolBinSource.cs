@@ -138,7 +138,7 @@ public class RigolBinSource : IWaveformSource
         return _metadata?[channelIndex] ?? default;
     }
 
-    public void ProcessChannelData(int channelIndex, double startTime, double endTime, DataProcessor processor)
+    public void ProcessChannelData(int channelIndex, TimeRange timeRange, DataProcessor processor)
     {
         if (_channelData == null || channelIndex < 0 || channelIndex >= ChannelCount) return;
 
@@ -146,8 +146,8 @@ public class RigolBinSource : IWaveformSource
         var data = _channelData[channelIndex];
 
         // Конвертуємо час у індекси масиву
-        var startIndex = (int)((startTime - meta.StartTime) / meta.SampleInterval);
-        var endIndex = (int)((endTime - meta.StartTime) / meta.SampleInterval);
+        var startIndex = (int)((timeRange.Start - meta.StartTime) / meta.SampleInterval);
+        var endIndex = (int)((timeRange.End - meta.StartTime) / meta.SampleInterval);
 
         startIndex = Math.Clamp(startIndex, 0, data.Length);
         endIndex = Math.Clamp(endIndex, startIndex, data.Length);

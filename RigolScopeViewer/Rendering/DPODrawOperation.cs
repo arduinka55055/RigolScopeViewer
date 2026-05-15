@@ -43,10 +43,9 @@ public class DpoDrawOperation : ICustomDrawOperation
     public Rect Bounds { get; }
 
     // Uniforms
-    public double PanX { get; }
-    public double ZoomX { get; }
-    public float VoltsMin { get; }
-    public float VoltsMax { get; }
+    public ViewportPan Pan { get; }
+    public ViewportZoom Zoom { get; }
+    public VoltageRange Voltage { get; }
     public float Intensity { get; }
 
     // Глобальний кеш буфера (щоб не виділяти пам'ять на кожен кадр)
@@ -58,15 +57,14 @@ public class DpoDrawOperation : ICustomDrawOperation
 
     private readonly ILogger<DpoDrawOperation> _logger;
 
-    public DpoDrawOperation(ILogger<DpoDrawOperation> logger, Rect bounds, RenderFrame frame, double panX, double zoomX, float vMin, float vMax, float intensity)
+    public DpoDrawOperation(ILogger<DpoDrawOperation> logger, Rect bounds, RenderFrame frame, ViewportPan pan, ViewportZoom zoom, VoltageRange voltage, float intensity)
     {
         Bounds = bounds;
         _frame = frame;
         _logger = logger;
-        PanX = panX;
-        ZoomX = zoomX;
-        VoltsMin = vMin;
-        VoltsMax = vMax;
+        Pan = pan;
+        Zoom = zoom;
+        Voltage = voltage;
         Intensity = intensity;
 
         if (ShaderCreationErrors != null)
@@ -117,10 +115,10 @@ public class DpoDrawOperation : ICustomDrawOperation
             var inputs = new SKRuntimeEffectUniforms(DpoEffect)
             {
                 ["iResolution"] = new[] { (float)width, (float)height },
-                ["iPan"] = new[] { (float)PanX, 0f },
-                ["iZoomX"] = (float)ZoomX,
-                ["iVoltsMin"] = VoltsMin,
-                ["iVoltsMax"] = VoltsMax,
+                ["iPan"] = new[] { (float)Pan.X, (float)Pan.Y },
+                ["iZoom"] = new[] { (float)Zoom.X, (float)Zoom.Y },
+                ["iVoltsMin"] = Voltage.Min,
+                ["iVoltsMax"] = Voltage.Max,
                 ["iIntensity"] = Intensity
             };
 

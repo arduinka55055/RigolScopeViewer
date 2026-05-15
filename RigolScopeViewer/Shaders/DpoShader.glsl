@@ -1,6 +1,6 @@
 uniform vec2 iResolution;
-uniform vec2 iPan;        // Зміщення миші в пікселях під час drag
-uniform float iZoomX;     // Зум по X під час drag (wheel)
+uniform vec2 iPan;        // Зміщення миші в пікселях під час drag (X: time, Y: voltage)
+uniform vec2 iZoom;       // Зум під час drag/wheel (X: time, Y: voltage)
 
 uniform float iVoltsMin;  // Нижня межа екрану у вольтах
 uniform float iVoltsMax;  // Верхня межа екрану у вольтах
@@ -12,7 +12,8 @@ uniform shader iDataTexture;
 half4 main(vec2 fragCoord) {
     // 1. Fake Pan & Zoom (зміщуємо координати екрану)
     vec2 virtualCoord = fragCoord;
-    virtualCoord.x = (virtualCoord.x - iPan.x) / iZoomX;
+    virtualCoord.x = (virtualCoord.x - iPan.x) / iZoom.x;
+    virtualCoord.y = (virtualCoord.y - iPan.y) / iZoom.y;
     
     // Отримуємо нормалізовані координати відносно оригінальної текстури
     vec2 uv = virtualCoord / iResolution;
@@ -48,5 +49,5 @@ half4 main(vec2 fragCoord) {
     vec3 color = vec3(1.0, 0.85, 0.1); 
 
     // Використовуємо alpha-premultiplied вивід для блендингу
-    return half4(color * alpha, 1.0);
+    return half4(color * alpha, alpha);
 }

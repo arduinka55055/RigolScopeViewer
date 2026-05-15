@@ -17,12 +17,11 @@ public class DpoBinningEngine : IResampler<ColumnStats>
     public void Resample(
         ReadOnlySpan<float> sourceVoltages,
         in WaveformMetadata metadata,
-        float viewportStartTime,
-        float viewportEndTime,
+        TimeRange timeRange,
         Span<ColumnStats> destinationBins)
     {
         var binCount = destinationBins.Length;
-        var timeRange = viewportEndTime - viewportStartTime;
+        var timeSpan = timeRange.Duration;
 
         // Оскільки ми не можемо виділяти масиви через `new`, ми використовуємо stackalloc!
         // Це виділяє тимчасову пам'ять прямо в кеші процесора (на стеку), що працює миттєво.
@@ -40,8 +39,8 @@ public class DpoBinningEngine : IResampler<ColumnStats>
 
         // Оптимізація: Знаходимо стартовий та кінцевий індекси масиву, 
         // щоб не крутити цикл по мільйонах точок, які поза екраном.
-        var startIndex = (int)((viewportStartTime - metadata.StartTime) / metadata.SampleInterval);
-        var endIndex = (int)((viewportEndTime - metadata.StartTime) / metadata.SampleInterval);
+        var startIndex = (int)((timeRange.Start - metadata.StartTime) / metadata.SampleInterval);
+        var endIndex = (int)((timeRange.End - metadata.StartTime) / metadata.SampleInterval);
 
         // Захист від виходу за межі масиву
         startIndex = Math.Clamp(startIndex, 0, sourceVoltages.Length);
@@ -53,7 +52,7 @@ public class DpoBinningEngine : IResampler<ColumnStats>
             var voltage = sourceVoltages[i];
             var time = metadata.StartTime + (i * metadata.SampleInterval);
 
-            var binIndex = (int)((time - viewportStartTime) / timeRange * binCount);
+            var binIndex = (int)((time - timeRange.Start) / timeSpan * binCount);
             if (binIndex >= 0 && binIndex < binCount)
             {
                 sums[binIndex] += voltage;

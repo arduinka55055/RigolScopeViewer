@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
@@ -6,33 +8,29 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using RigolScopeViewer.Services; // Для RenderFrame
+using RigolScopeViewer.Services;
+using RigolScopeViewer.ViewModels;
 
 namespace RigolScopeViewer;
 
-// Структура для передачі налаштувань масштабу у ViewModel
 public readonly struct ViewportChangeParams(double panPercent, double zoomFactor, int screenWidthPx)
 {
-    public double PanPercent { get; } = panPercent; // Напр. -0.1 (зсув на 10% вліво)
-    public double ZoomFactor { get; } = zoomFactor; // Напр. 0.8 (зум ін) або 1.25 (зум аут)
+    public double PanPercent { get; } = panPercent;
+    public double ZoomFactor { get; } = zoomFactor;
     public int ScreenWidthPx { get; } = screenWidthPx;
 }
 
 public class GPUScopeControl : Control
 {
-    // --- 1. ПРИВ'ЯЗКИ (BINDINGS) ---
+    public static readonly StyledProperty<IEnumerable<ChannelViewModel>?> ChannelsProperty =
+        AvaloniaProperty.Register<GPUScopeControl, IEnumerable<ChannelViewModel>?>(nameof(Channels));
 
-    // Властивість для ВХІДНИХ ДАНИХ (від ViewModel до Контрола)
-    public static readonly StyledProperty<RenderFrame?> FrameDataProperty =
-        AvaloniaProperty.Register<GPUScopeControl, RenderFrame?>(nameof(FrameData));
-
-    public RenderFrame? FrameData
+    public IEnumerable<ChannelViewModel>? Channels
     {
-        get => GetValue(FrameDataProperty);
-        set => SetValue(FrameDataProperty, value);
+        get => GetValue(ChannelsProperty);
+        set => SetValue(ChannelsProperty, value);
     }
 
-    // Команда для ВИХІДНИХ ПОДІЙ (від Контрола до ViewModel)
     public static readonly StyledProperty<ICommand?> UpdateViewportCommandProperty =
         AvaloniaProperty.Register<GPUScopeControl, ICommand?>(nameof(UpdateViewportCommand));
 
@@ -42,58 +40,111 @@ public class GPUScopeControl : Control
         set => SetValue(UpdateViewportCommandProperty, value);
     }
 
-    // --- 2. СТАН ЕКРАНУ ---
-    private double _panX = 0.0;
-    private double _zoomX = 1.0;
-    private float _voltsMin = -4.0f;
-    private float _voltsMax = 4.0f;
+    private ViewportPan _pan = new(0.0, 0.0);
+    private ViewportZoom _zoom = new(1.0, 1.0);
     private float _intensity = 2.0f;
     private bool _isDragging = false;
     private Point? _lastMousePosition;
 
-    // --- 3. РЕАКЦІЯ НА НОВІ ДАНІ ---
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
 
-        // Якщо ViewModel прислала нам новий прорахований кадр:
-        if (change.Property == FrameDataProperty)
+        if (change.Property == ChannelsProperty)
         {
-            // Скидаємо візуальний шейдерний зсув, бо нові дані вже відцентровані
-            _panX = 0;
-            _zoomX = 1.0;
-            InvalidateVisual(); // Перемалювати екран
+            if (change.OldValue is IEnumerable<ChannelViewModel> oldChannels)
+            {
+                if (oldChannels is INotifyCollectionChanged oldCollection)
+                    oldCollection.CollectionChanged -= Channels_CollectionChanged;
+
+                foreach (var ch in oldChannels)
+                    ch.PropertyChanged -= Channel_PropertyChanged;
+            }
+
+            if (change.NewValue is IEnumerable<ChannelViewModel> newChannels)
+            {
+                if (newChannels is INotifyCollectionChanged newCollection)
+                    newCollection.CollectionChanged += Channels_CollectionChanged;
+
+                foreach (var ch in newChannels)
+                    ch.PropertyChanged += Channel_PropertyChanged;
+            }
+
+            _pan = new(0.0, 0.0);
+            _zoom = new(1.0, 1.0);
+            InvalidateVisual();
         }
     }
 
-    // Кешуємо логер як поле класу, щоб не діставати його з DI на кожному кадрі (це повільно)
-    private readonly ILogger<DpoDrawOperation>? _drawLogger;
+    private void Channels_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems != null)
+        {
+            foreach (ChannelViewModel ch in e.OldItems)
+                ch.PropertyChanged -= Channel_PropertyChanged;
+        }
+
+        if (e.NewItems != null)
+        {
+            foreach (ChannelViewModel ch in e.NewItems)
+                ch.PropertyChanged += Channel_PropertyChanged;
+        }
+
+        InvalidateVisual();
+    }
+
+    private double _uncommittedPanX = 0;
+
+    private void Channel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ChannelViewModel.IsVisible) || 
+            e.PropertyName == nameof(ChannelViewModel.Scale) || 
+            e.PropertyName == nameof(ChannelViewModel.VoltageOffset))
+        {
+            InvalidateVisual();
+        }
+        else if (e.PropertyName == nameof(ChannelViewModel.CurrentFrame))
+        {
+            _pan = new(0.0, _pan.Y);
+            _zoom = new(1.0, _zoom.Y);
+            _uncommittedPanX = 0;
+            InvalidateVisual();
+        }
+    }
+
+    private readonly ILogger<DpoDrawOperation> _drawLogger;
 
     public GPUScopeControl()
     {
-        _drawLogger = App.Services?.GetService<ILogger<DpoDrawOperation>>();
+        _drawLogger = App.Services!.GetRequiredService<ILogger<DpoDrawOperation>>();
     }
 
     public override void Render(DrawingContext context)
     {
-        if (FrameData == null) return; // Нічого не малюємо, якщо даних немає
+        if (Channels == null) return;
 
         var bounds = new Rect(default, Bounds.Size);
 
-        // Передаємо наші РЕАЛЬНІ дані (_FrameData) замість mock-даних
-        context.Custom(new DpoDrawOperation(
-            _drawLogger,
-            bounds,
-            FrameData, // Твій оновлений DpoDrawOperation має приймати RenderFrame
-            _panX,
-            _zoomX,
-            _voltsMin,
-            _voltsMax,
-            _intensity
-        ));
-    }
+        foreach (var channel in Channels)
+        {
+            if (channel == null || !channel.IsVisible || channel.CurrentFrame == null) continue;
 
-    // --- 4. ОБРОБКА ЖЕСТІВ ---
+            // Apply channel-specific voltage range/offset
+            var voltageMin = -(4.0f * channel.Scale) + channel.VoltageOffset;
+            var voltageMax = (4.0f * channel.Scale) + channel.VoltageOffset;
+            var channelVoltage = new VoltageRange(voltageMin, voltageMax);
+
+            context.Custom(new DpoDrawOperation(
+                _drawLogger,
+                bounds,
+                channel.CurrentFrame,
+                _pan,
+                _zoom,
+                channelVoltage,
+                _intensity
+            ));
+        }
+    }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -115,10 +166,13 @@ public class GPUScopeControl : Control
         if (_isDragging && _lastMousePosition.HasValue)
         {
             var currentPosition = e.GetPosition(this);
-            _panX += (currentPosition.X - _lastMousePosition.Value.X);
+            var deltaX = currentPosition.X - _lastMousePosition.Value.X;
+            var deltaY = currentPosition.Y - _lastMousePosition.Value.Y;
+
+            _pan = new(_pan.X + deltaX, _pan.Y + deltaY);
+            _uncommittedPanX += deltaX;
             _lastMousePosition = currentPosition;
 
-            // Швидко малюємо зсув на відеокарті
             InvalidateVisual();
         }
     }
@@ -133,16 +187,17 @@ public class GPUScopeControl : Control
             _lastMousePosition = null;
             e.Pointer.Capture(null);
 
-            // ТУТ ВІДБУВАЄТЬСЯ МАГІЯ
-            // Рахуємо, на скільки екранів (відсотків) ми зсунули графік
-            double panPercent = _panX / Bounds.Width;
+            double panPercent = _uncommittedPanX / Bounds.Width;
+            _uncommittedPanX = 0;
 
-            // Відправляємо запит у ViewModel на перерахунок математики
-            var args = new ViewportChangeParams(-panPercent, 1.0, (int)Bounds.Width);
-
-            if (UpdateViewportCommand?.CanExecute(args) == true)
+            if (Math.Abs(panPercent) > 0.0001)
             {
-                UpdateViewportCommand.Execute(args);
+                var args = new ViewportChangeParams(-panPercent, 1.0, (int)Bounds.Width);
+
+                if (UpdateViewportCommand?.CanExecute(args) == true)
+                {
+                    UpdateViewportCommand.Execute(args);
+                }
             }
         }
     }
@@ -151,18 +206,32 @@ public class GPUScopeControl : Control
     {
         base.OnPointerWheelChanged(e);
 
+        var point = e.GetCurrentPoint(this).Position;
         double zoomFactor = e.Delta.Y > 0 ? 0.8 : 1.25;
 
-        // Показуємо швидкий зум на відеокарті
-        _zoomX *= zoomFactor;
-        InvalidateVisual();
+        bool isVoltageZoom = (e.KeyModifiers & KeyModifiers.Shift) != 0;
 
-        // Відразу просимо ViewModel перерахувати реальні точки
-        var args = new ViewportChangeParams(0.0, zoomFactor, (int)Bounds.Width);
-
-        if (UpdateViewportCommand?.CanExecute(args) == true)
+        if (isVoltageZoom)
         {
-            UpdateViewportCommand.Execute(args);
+            double newPanY = point.Y - (point.Y - _pan.Y) * zoomFactor;
+            _pan = new(_pan.X, newPanY);
+            _zoom = new(_zoom.X, _zoom.Y * zoomFactor);
         }
+        else
+        {
+            double newPanX = point.X - (point.X - _pan.X) * zoomFactor;
+            _pan = new(newPanX, _pan.Y);
+            _zoom = new(_zoom.X * zoomFactor, _zoom.Y);
+
+            double panPercent = (point.X / Bounds.Width) * (1.0 - zoomFactor) / zoomFactor;
+            var args = new ViewportChangeParams(panPercent, zoomFactor, (int)Bounds.Width);
+
+            if (UpdateViewportCommand?.CanExecute(args) == true)
+            {
+                UpdateViewportCommand.Execute(args);
+            }
+        }
+
+        InvalidateVisual();
     }
 }

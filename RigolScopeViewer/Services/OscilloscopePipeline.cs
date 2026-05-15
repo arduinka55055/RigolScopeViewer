@@ -27,7 +27,7 @@ public class OscilloscopePipeline(IResampler<ColumnStats> resampler) : IOscillos
 
             // CPU рахує математику тут
             // FIXME: float vs double - треба визначитись, бо це впливає на швидкість і точність. Можливо, для часу краще double, а для вольтажу float?
-            _resampler.Resample(rawData, metadata, (float)viewport.TimeStart, (float)viewport.TimeEnd, destinationSpan);
+            _resampler.Resample(rawData, metadata, viewport.Time, destinationSpan);
 
             return new RenderFrame(rentedArray, viewport.ScreenWidthPx, viewport);
         }

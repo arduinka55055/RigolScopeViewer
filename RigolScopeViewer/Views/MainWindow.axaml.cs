@@ -33,7 +33,7 @@ public partial class MainWindow : Window
                     args.PropertyName == nameof(MainViewModel.ShowTrigger))
                 {
                     // Find the oscilloscope control and update it
-                    var scopeControl = this.FindControl<OscilloscopeControlDebug>("OscilloscopeView");
+                    var scopeControl = this.FindControl<OscilloscopeControl>("OscilloscopeView");
                 }
             };
         }
