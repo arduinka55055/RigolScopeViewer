@@ -18,6 +18,9 @@
         <local:ScopeGridControl 
             HorizontalAlignment="Stretch" 
             VerticalAlignment="Stretch"
+            TimePerDivision="{Binding TimePerDivision}"
+            TimeOffset="{Binding TimeOffset}"
+            Channels="{Binding Channels}"
             IsHitTestVisible="False" />
     </Grid>
     

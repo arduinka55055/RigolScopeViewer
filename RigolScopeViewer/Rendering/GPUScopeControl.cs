@@ -236,8 +236,8 @@ public class GPUScopeControl : Control
         // Scrolling up (Delta.Y > 0) means Zoom In.
         // Visually, the rendered waveform should stretch and become larger (renderZoom > 1.0).
         // Data-wise, the time window we load should shrink (dataZoom < 1.0).
-        double renderZoom = e.Delta.Y > 0 ? 1.25 : 0.8;
-        double dataZoom = 1.0 / renderZoom; // 0.8 or 1.25
+        double renderZoom = Math.Pow(1.25, e.Delta.Y);
+        double dataZoom = 1.0 / renderZoom;
 
         bool isVoltageZoom = (e.KeyModifiers & KeyModifiers.Shift) != 0;
 

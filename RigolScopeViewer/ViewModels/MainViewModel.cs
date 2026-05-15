@@ -105,7 +105,7 @@ public partial class MainViewModel : ViewModelBase
 
     // Команда, яку викликає GPUScopeControl при відпусканні миші або скролі
     [RelayCommand]
-    private async Task ChangeViewport(ViewportChangeParams args)
+    private void ChangeViewport(ViewportChangeParams args)
     {
         _isUpdatingViewport = true;
         try
@@ -147,7 +147,7 @@ public partial class MainViewModel : ViewModelBase
         }
 
         // 4. Запитуємо новий кадр (твоя функція з Task.Run та IResampler)
-        await RequestNewFrameAsync();
+        _ = RequestNewFrameAsync();
     }
 
 
@@ -304,6 +304,10 @@ public partial class MainViewModel : ViewModelBase
                 }
                 return results;
             }, token);
+
+            // Prevent race condition: If a new viewport change occurred while Task.Run was finishing,
+            // we MUST discard this stale frame to avoid resetting the visual pan/zoom prematurely!
+            token.ThrowIfCancellationRequested();
 
             for (int i = 0; i < Channels.Count; i++)
             {
