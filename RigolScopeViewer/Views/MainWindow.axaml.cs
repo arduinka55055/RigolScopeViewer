@@ -1,5 +1,6 @@
 ﻿using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using RigolScopeViewer.ViewModels;
 using System;
@@ -16,6 +17,20 @@ public partial class MainWindow : Window
 #endif
 
         DataContext = viewModel;
+    }
+
+    private void Channel_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control control && control.DataContext is ChannelViewModel clickedChannel)
+        {
+            if (DataContext is MainViewModel vm)
+            {
+                foreach (var ch in vm.Channels)
+                {
+                    ch.IsActive = (ch == clickedChannel);
+                }
+            }
+        }
     }
 
     protected override void OnDataContextChanged(EventArgs e)

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Linq;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
@@ -170,7 +171,30 @@ public class GPUScopeControl : Control
             var deltaX = currentPosition.X - _lastMousePosition.Value.X;
             var deltaY = currentPosition.Y - _lastMousePosition.Value.Y;
 
-            _pan = new(_pan.X + deltaX, _pan.Y + deltaY);
+            bool handledVertical = false;
+            if (Math.Abs(deltaY) > 0 && Channels != null)
+            {
+                var activeChannel = Channels.FirstOrDefault(c => c.IsActive && c.IsVisible);
+                if (activeChannel != null)
+                {
+                    // DeltaY > 0 means moving mouse down, which visually means the signal moves down
+                    // Signal moves down -> VoltageOffset increases
+                    double panPercentY = deltaY / Bounds.Height;
+                    double totalVoltage = activeChannel.Scale * 8.0; // 8 vertical divisions
+                    activeChannel.VoltageOffset += (float)(totalVoltage * panPercentY);
+                    handledVertical = true;
+                }
+            }
+
+            if (!handledVertical)
+            {
+                _pan = new(_pan.X + deltaX, _pan.Y + deltaY);
+            }
+            else
+            {
+                _pan = new(_pan.X + deltaX, _pan.Y);
+            }
+
             _uncommittedPanX += deltaX;
             _lastMousePosition = currentPosition;
 
@@ -219,10 +243,25 @@ public class GPUScopeControl : Control
 
         if (isVoltageZoom)
         {
-            // Visual zoom for voltage (Y axis) - keeping the mouse Y position anchored
-            double newPanY = point.Y - (point.Y - _pan.Y) * renderZoom;
-            _pan = new(_pan.X, newPanY);
-            _zoom = new(_zoom.X, _zoom.Y * renderZoom);
+            // Update active channel's Scale and VoltageOffset instead of visual _zoom.Y
+            if (Channels != null)
+            {
+                var activeChannel = Channels.FirstOrDefault(c => c.IsActive && c.IsVisible);
+                if (activeChannel != null)
+                {
+                    double panPercentY = (point.Y / Bounds.Height) * (1.0 - renderZoom) / renderZoom;
+                    double totalVoltage = activeChannel.Scale * 8.0; // 8 vertical divisions usually
+                    
+                    // Center around the mouse pointer
+                    activeChannel.VoltageOffset += (float)(totalVoltage * panPercentY);
+                    activeChannel.Scale *= (float)dataZoom;
+                    
+                    if (activeChannel.VoltageOffset > 10000f) activeChannel.VoltageOffset = 10000f;
+                    if (activeChannel.VoltageOffset < -10000f) activeChannel.VoltageOffset = -10000f;
+                    if (activeChannel.Scale > 10000f) activeChannel.Scale = 10000f;
+                    if (activeChannel.Scale < 1e-6f) activeChannel.Scale = 1e-6f;
+                }
+            }
         }
         else
         {

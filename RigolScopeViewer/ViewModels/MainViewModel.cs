@@ -115,6 +115,10 @@ public partial class MainViewModel : ViewModelBase
             {
                 // Беремо твій поточний TimePerDivision і множимо
                 TimePerDivision *= args.ZoomFactor;
+                
+                // Constraints so we don't zoom out to infinity
+                if (TimePerDivision > 10000.0) TimePerDivision = 10000.0;
+                if (TimePerDivision < 1e-9) TimePerDivision = 1e-9;
             }
 
             // 2. Оновлюємо зміщення на основі панорамування (Pan)
@@ -125,6 +129,10 @@ public partial class MainViewModel : ViewModelBase
 
                 // Зміщуємо стартовий час на відповідну кількість секунд
                 TimeOffset += totalScreenTime * args.PanPercent;
+                
+                // Constraint so we don't pan to infinity
+                if (TimeOffset > 100000.0) TimeOffset = 100000.0;
+                if (TimeOffset < -100000.0) TimeOffset = -100000.0;
             }
 
             // 3. Оноалюємо ширину екрану в пікселях (це потрібно для правильного ресемплінгу)

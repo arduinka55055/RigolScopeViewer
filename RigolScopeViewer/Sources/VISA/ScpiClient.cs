@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
@@ -17,7 +17,7 @@ public class ScpiClient : IDisposable
     {
         _timeoutMs = timeoutMs;
         _client = new TcpClient();
-        
+
         var result = _client.BeginConnect(ipAddress, port, null, null);
         var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(timeoutMs));
 
@@ -48,7 +48,7 @@ public class ScpiClient : IDisposable
     public async Task<byte[]> QueryBinaryValuesAsync(string command, CancellationToken ct = default)
     {
         await WriteAsync(command, ct);
-        
+
         // Read TMC block header: #NXXXXXX...
         // 1. Read '#'
         int hash = _stream.ReadByte();

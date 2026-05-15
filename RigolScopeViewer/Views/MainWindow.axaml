@@ -88,7 +88,15 @@
         <ItemsControl ItemsSource="{Binding Channels}">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border BorderBrush="#404040" BorderThickness="0,0,0,1" Padding="10,5">
+              <Border Classes.active="{Binding IsActive}" BorderThickness="2" Padding="10,5" Background="Transparent" PointerPressed="Channel_PointerPressed">
+                <Border.Styles>
+                  <Style Selector="Border">
+                    <Setter Property="BorderBrush" Value="#404040"/>
+                  </Style>
+                  <Style Selector="Border.active">
+                    <Setter Property="BorderBrush" Value="#007ACC"/>
+                  </Style>
+                </Border.Styles>
                 <StackPanel>
                   <CheckBox Content="{Binding Name}" IsChecked="{Binding IsVisible}"/>
 

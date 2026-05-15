@@ -14,6 +14,11 @@
             VerticalAlignment="Stretch" 
             Channels="{Binding Channels}"
             UpdateViewportCommand="{Binding ChangeViewportCommand}" />
+            
+        <local:ScopeGridControl 
+            HorizontalAlignment="Stretch" 
+            VerticalAlignment="Stretch"
+            IsHitTestVisible="False" />
     </Grid>
     
 </UserControl>

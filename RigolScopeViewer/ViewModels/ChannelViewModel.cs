@@ -16,6 +16,9 @@ public partial class ChannelViewModel : ViewModelBase
     private bool _isVisible = true;
 
     [ObservableProperty]
+    private bool _isActive = false;
+
+    [ObservableProperty]
     private float _scale = 1.0f; // Volts per division
 
     [ObservableProperty]
