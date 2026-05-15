@@ -1,4 +1,5 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+﻿using Avalonia.Media;
+using CommunityToolkit.Mvvm.ComponentModel;
 using RigolScopeViewer.Models;
 using RigolScopeViewer.Services;
 
@@ -19,6 +20,9 @@ public partial class ChannelViewModel : ViewModelBase
 
     [ObservableProperty]
     private float _voltageOffset = 0.0f;
+
+    [ObservableProperty]
+    private Color _channelColor = Colors.Yellow;
 
     [ObservableProperty]
     private RenderFrame? _currentFrame;

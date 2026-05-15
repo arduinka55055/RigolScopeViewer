@@ -47,6 +47,7 @@ public class DpoDrawOperation : ICustomDrawOperation
     public ViewportZoom Zoom { get; }
     public VoltageRange Voltage { get; }
     public float Intensity { get; }
+    public Color ChannelColor { get; }
 
     // Глобальний кеш буфера (щоб не виділяти пам'ять на кожен кадр)
     // У реальному додатку це має бути в окремому сервісі, який керує ресурсами
@@ -57,7 +58,7 @@ public class DpoDrawOperation : ICustomDrawOperation
 
     private readonly ILogger<DpoDrawOperation> _logger;
 
-    public DpoDrawOperation(ILogger<DpoDrawOperation> logger, Rect bounds, RenderFrame frame, ViewportPan pan, ViewportZoom zoom, VoltageRange voltage, float intensity)
+    public DpoDrawOperation(ILogger<DpoDrawOperation> logger, Rect bounds, RenderFrame frame, ViewportPan pan, ViewportZoom zoom, VoltageRange voltage, float intensity, Color color)
     {
         Bounds = bounds;
         _frame = frame;
@@ -66,6 +67,8 @@ public class DpoDrawOperation : ICustomDrawOperation
         Zoom = zoom;
         Voltage = voltage;
         Intensity = intensity;
+        ChannelColor = color;
+
 
         if (ShaderCreationErrors != null)
         {
@@ -119,7 +122,8 @@ public class DpoDrawOperation : ICustomDrawOperation
                 ["iZoom"] = new[] { (float)Zoom.X, (float)Zoom.Y },
                 ["iVoltsMin"] = Voltage.Min,
                 ["iVoltsMax"] = Voltage.Max,
-                ["iIntensity"] = Intensity
+                ["iIntensity"] = Intensity,
+                ["iColor"] = new[] { ChannelColor.R / 255f, ChannelColor.G / 255f, ChannelColor.B / 255f }
             };
 
             using var shader = DpoEffect.ToShader(uniforms: inputs, children: children);

@@ -5,6 +5,7 @@ uniform vec2 iZoom;       // Зум під час drag/wheel (X: time, Y: voltag
 uniform float iVoltsMin;  // Нижня межа екрану у вольтах
 uniform float iVoltsMax;  // Верхня межа екрану у вольтах
 uniform float iIntensity;
+uniform vec3 iColor;      // Колір каналу
 
 // Наша 1D текстура з даними бінів.
 uniform shader iDataTexture; 
@@ -20,7 +21,7 @@ half4 main(vec2 fragCoord) {
 
     // Якщо ми витягнули графік за межі наявних даних - малюємо чорний фон
     if (uv.x < 0.0 || uv.x > 1.0) {
-        return half4(0.0, 0.0, 0.0, 1.0);
+        return half4(1.0, 0.0, 0.0, 1.0);
     }
 
     // 2. Читаємо дані біна. 
@@ -45,9 +46,6 @@ half4 main(vec2 fragCoord) {
     
     alpha = clamp(alpha, 0.0, 1.0);
 
-    // Колір фосфору (класичний осцилограф)
-    vec3 color = vec3(1.0, 0.85, 0.1); 
-
     // Використовуємо alpha-premultiplied вивід для блендингу
-    return half4(color * alpha, alpha);
+    return half4(iColor * alpha, alpha);
 }

@@ -1,4 +1,4 @@
-﻿using Avalonia.Controls;
+using Avalonia.Controls;
 using CommunityToolkit.Mvvm.Input;
 using RigolScopeViewer.Models;
 using RigolScopeViewer.Services;
@@ -55,6 +55,24 @@ public partial class MainViewModel : ViewModelBase
     public ICommand ZoomInCommand { get; }
     public ICommand ZoomOutCommand { get; }
 
+    private bool _isUpdatingViewport = false;
+
+    partial void OnTimePerDivisionChanged(double value)
+    {
+        if (!_isUpdatingViewport) _ = RequestNewFrameAsync();
+    }
+
+    partial void OnTimeOffsetChanged(double value)
+    {
+        if (!_isUpdatingViewport) _ = RequestNewFrameAsync();
+    }
+
+    private Color GetChannelColor(int index)
+    {
+        var colors = new[] { Colors.Yellow, Colors.Cyan, Colors.Magenta, Colors.Lime };
+        return colors[index % colors.Length];
+    }
+
     /// <summary>
     /// Constructor for dependency injection.
     /// Parameters can be null for backward compatibility/testing.
@@ -82,27 +100,35 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private async Task ChangeViewport(ViewportChangeParams args)
     {
-        // 1. Оновлюємо час на основі зуму (ZoomIn = менше секунд на екран)
-        if (args.ZoomFactor != 1.0)
+        _isUpdatingViewport = true;
+        try
         {
-            // Беремо твій поточний TimePerDivision і множимо
-            TimePerDivision *= args.ZoomFactor;
+            // 1. Оновлюємо час на основі зуму (ZoomIn = менше секунд на екран)
+            if (args.ZoomFactor != 1.0)
+            {
+                // Беремо твій поточний TimePerDivision і множимо
+                TimePerDivision *= args.ZoomFactor;
+            }
+
+            // 2. Оновлюємо зміщення на основі панорамування (Pan)
+            if (args.PanPercent != 0.0)
+            {
+                // Загальний час на екрані = TimePerDivision * 10 (якщо 10 клітинок)
+                double totalScreenTime = TimePerDivision * 10.0;
+
+                // Зміщуємо стартовий час на відповідну кількість секунд
+                TimeOffset += totalScreenTime * args.PanPercent;
+            }
+
+            // 3. Оноалюємо ширину екрану в пікселях (це потрібно для правильного ресемплінгу)
+            if (args.ScreenWidthPx > 0)
+            {
+                ScreenWidthPx = args.ScreenWidthPx;
+            }
         }
-
-        // 2. Оновлюємо зміщення на основі панорамування (Pan)
-        if (args.PanPercent != 0.0)
+        finally
         {
-            // Загальний час на екрані = TimePerDivision * 10 (якщо 10 клітинок)
-            double totalScreenTime = TimePerDivision * 10.0;
-
-            // Зміщуємо стартовий час на відповідну кількість секунд
-            TimeOffset += totalScreenTime * args.PanPercent;
-        }
-
-        // 3. Оноалюємо ширину екрану в пікселях (це потрібно для правильного ресемплінгу)
-        if (args.ScreenWidthPx > 0)
-        {
-            ScreenWidthPx = args.ScreenWidthPx;
+            _isUpdatingViewport = false;
         }
 
         // 4. Запитуємо новий кадр (твоя функція з Task.Run та IResampler)
@@ -148,7 +174,9 @@ public partial class MainViewModel : ViewModelBase
                 for (int i = 0; i < _currentLoader.ChannelCount; i++)
                 {
                     var meta = _currentLoader.GetMetadata(i);
-                    Channels.Add(new ChannelViewModel(i, meta.ChannelName));
+                    var chVM = new ChannelViewModel(i, meta.ChannelName);
+                    chVM.ChannelColor = GetChannelColor(i);
+                    Channels.Add(chVM);
                 }
 
                 await RequestNewFrameAsync();
@@ -214,4 +242,3 @@ public partial class MainViewModel : ViewModelBase
         IsBusy = false; // Вимикаємо загрузку
     }
 }
-

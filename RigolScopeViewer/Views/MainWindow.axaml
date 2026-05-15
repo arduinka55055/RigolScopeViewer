@@ -79,7 +79,7 @@
       <!-- Oscilloscope Display -->
       <local:OscilloscopeControl x:Name="OscilloscopeView"
                                  Grid.Column="0"
-                                 Background="LightBlue" />
+                                 Background="#111" />
 
       <!-- Channel Controls -->
       <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Background="#444">
