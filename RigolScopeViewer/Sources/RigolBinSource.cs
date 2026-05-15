@@ -138,7 +138,7 @@ public class RigolBinSource : IWaveformSource
         return _metadata?[channelIndex] ?? default;
     }
 
-    public void ProcessChannelData(int channelIndex, TimeRange timeRange, DataProcessor processor)
+    public void ProcessChannelData(int channelIndex, TimeRange timeRange, DataProcessor processor, System.Threading.CancellationToken cancellationToken = default)
     {
         if (_channelData == null || channelIndex < 0 || channelIndex >= ChannelCount) return;
 
@@ -163,7 +163,7 @@ public class RigolBinSource : IWaveformSource
             slice = data.AsSpan();
         }
 
-        processor(slice, meta);
+        processor(slice, meta, cancellationToken);
     }
 
     public void Start()

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using RigolScopeViewer.Models;
 
 /// <summary>
@@ -17,5 +18,6 @@ public interface IResampler<TOutput> where TOutput : unmanaged
         ReadOnlySpan<float> sourceVoltages,
         in WaveformMetadata metadata,
         TimeRange timeRange,
-        Span<TOutput> destinationBins);
+        Span<TOutput> destinationBins,
+        CancellationToken cancellationToken = default);
 }

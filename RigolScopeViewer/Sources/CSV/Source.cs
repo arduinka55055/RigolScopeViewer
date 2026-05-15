@@ -164,7 +164,7 @@ public class CsvWaveformSource : IWaveformSource
 
     public WaveformMetadata GetMetadata(int channelIndex) => _metadata[channelIndex];
 
-    public void ProcessChannelData(int channelIndex, TimeRange timeRange, DataProcessor processor)
+    public void ProcessChannelData(int channelIndex, TimeRange timeRange, DataProcessor processor, System.Threading.CancellationToken cancellationToken = default)
     {
         if (_channelData == null || channelIndex < 0 || channelIndex >= ChannelCount) return;
 
@@ -181,7 +181,7 @@ public class CsvWaveformSource : IWaveformSource
         // Магія Zero-Allocation! Віддаємо лише шматочок масиву через Span.
         ReadOnlySpan<float> slice = data.AsSpan(startIndex, endIndex - startIndex);
 
-        processor(slice, meta);
+        processor(slice, meta, cancellationToken);
     }
 
     public void Start()

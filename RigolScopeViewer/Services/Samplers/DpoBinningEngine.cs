@@ -18,7 +18,8 @@ public class DpoBinningEngine : IResampler<ColumnStats>
         ReadOnlySpan<float> sourceVoltages,
         in WaveformMetadata metadata,
         TimeRange timeRange,
-        Span<ColumnStats> destinationBins)
+        Span<ColumnStats> destinationBins,
+        System.Threading.CancellationToken cancellationToken = default)
     {
         var binCount = destinationBins.Length;
         var timeSpan = timeRange.Duration;
@@ -49,6 +50,8 @@ public class DpoBinningEngine : IResampler<ColumnStats>
         // 1. Акумуляція даних
         for (var i = startIndex; i < endIndex; i++)
         {
+            if (i % 10000 == 0) cancellationToken.ThrowIfCancellationRequested();
+
             var voltage = sourceVoltages[i];
             var time = metadata.StartTime + (i * metadata.SampleInterval);
 

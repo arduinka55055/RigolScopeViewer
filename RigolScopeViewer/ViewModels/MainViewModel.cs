@@ -43,6 +43,7 @@ public partial class MainViewModel : ViewModelBase
 
     private readonly IOscilloscopePipeline _pipeline;
     private IWaveformSource? _currentLoader;
+    private System.Threading.CancellationTokenSource? _renderCts;
 
     [ObservableProperty]
     private bool _isBusy; // Прив'яжи це до <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
@@ -200,6 +201,10 @@ public partial class MainViewModel : ViewModelBase
     {
         if (_currentLoader == null) return;
 
+        _renderCts?.Cancel();
+        _renderCts = new System.Threading.CancellationTokenSource();
+        var token = _renderCts.Token;
+
         IsBusy = true; // Показуємо загрузку
 
         // Створюємо Viewport на основі твоїх налаштувань UI
@@ -216,29 +221,44 @@ public partial class MainViewModel : ViewModelBase
         // всередині якого викликаємо лоадер. Лоадер дає Span, ми віддаємо його в пайплайн,
         // і результат (RenderFrame) повертаємо в UI потік. ZERO COPY!
 
-        var newFrames = await Task.Run(() =>
+        try
         {
-            var results = new RenderFrame?[Channels.Count];
+            var newFrames = await Task.Run(() =>
+            {
+                var results = new RenderFrame?[Channels.Count];
+                for (int i = 0; i < Channels.Count; i++)
+                {
+                    token.ThrowIfCancellationRequested();
+
+                    if (!Channels[i].IsVisible) continue;
+
+                    RenderFrame? result = null;
+                    _currentLoader.ProcessChannelData(Channels[i].Index, viewport.Time, (span, in metadata, ct) =>
+                    {
+                        result = _pipeline.ProcessFrame(span, metadata, viewport, ct);
+                    }, token);
+                    results[i] = result;
+                }
+                return results;
+            }, token);
+
             for (int i = 0; i < Channels.Count; i++)
             {
-                if (!Channels[i].IsVisible) continue;
-
-                RenderFrame? result = null;
-                _currentLoader.ProcessChannelData(Channels[i].Index, viewport.Time, (span, in metadata) =>
-                {
-                    result = _pipeline.ProcessFrame(span, metadata, viewport);
-                });
-                results[i] = result;
+                Channels[i].CurrentFrame?.Dispose();
+                Channels[i].CurrentFrame = newFrames[i];
             }
-            return results;
-        });
-
-        for (int i = 0; i < Channels.Count; i++)
-        {
-            Channels[i].CurrentFrame?.Dispose();
-            Channels[i].CurrentFrame = newFrames[i];
         }
-
-        IsBusy = false; // Вимикаємо загрузку
+        catch (OperationCanceledException)
+        {
+            _logger?.LogDebug("Frame rendering cancelled due to new viewport request.");
+        }
+        finally
+        {
+            // Only set IsBusy = false if this is still the active token (not overridden by a newer request)
+            if (!token.IsCancellationRequested)
+            {
+                IsBusy = false; // Вимикаємо загрузку
+            }
+        }
     }
 }
