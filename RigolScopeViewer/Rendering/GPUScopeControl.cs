@@ -141,7 +141,8 @@ public class GPUScopeControl : Control
                 _pan,
                 _zoom,
                 channelVoltage,
-                _intensity
+                _intensity,
+                channel.ChannelColor
             ));
         }
     }
@@ -207,24 +208,33 @@ public class GPUScopeControl : Control
         base.OnPointerWheelChanged(e);
 
         var point = e.GetCurrentPoint(this).Position;
-        double zoomFactor = e.Delta.Y > 0 ? 0.8 : 1.25;
+
+        // Scrolling up (Delta.Y > 0) means Zoom In.
+        // Visually, the rendered waveform should stretch and become larger (renderZoom > 1.0).
+        // Data-wise, the time window we load should shrink (dataZoom < 1.0).
+        double renderZoom = e.Delta.Y > 0 ? 1.25 : 0.8;
+        double dataZoom = 1.0 / renderZoom; // 0.8 or 1.25
 
         bool isVoltageZoom = (e.KeyModifiers & KeyModifiers.Shift) != 0;
 
         if (isVoltageZoom)
         {
-            double newPanY = point.Y - (point.Y - _pan.Y) * zoomFactor;
+            // Visual zoom for voltage (Y axis) - keeping the mouse Y position anchored
+            double newPanY = point.Y - (point.Y - _pan.Y) * renderZoom;
             _pan = new(_pan.X, newPanY);
-            _zoom = new(_zoom.X, _zoom.Y * zoomFactor);
+            _zoom = new(_zoom.X, _zoom.Y * renderZoom);
         }
         else
         {
-            double newPanX = point.X - (point.X - _pan.X) * zoomFactor;
+            // Visual zoom for time (X axis) - keeping the mouse X position anchored
+            double newPanX = point.X - (point.X - _pan.X) * renderZoom;
             _pan = new(newPanX, _pan.Y);
-            _zoom = new(_zoom.X * zoomFactor, _zoom.Y);
+            _zoom = new(_zoom.X * renderZoom, _zoom.Y);
 
-            double panPercent = (point.X / Bounds.Width) * (1.0 - zoomFactor) / zoomFactor;
-            var args = new ViewportChangeParams(panPercent, zoomFactor, (int)Bounds.Width);
+            // Calculate how much to shift the time offset so the data under the mouse pointer remains stable.
+            // MainViewModel will calculate: TimeOffset_new = TimeOffset_old + TotalNewScreenTime * panPercent
+            double panPercent = (point.X / Bounds.Width) * (1.0 - dataZoom) / dataZoom;
+            var args = new ViewportChangeParams(panPercent, dataZoom, (int)Bounds.Width);
 
             if (UpdateViewportCommand?.CanExecute(args) == true)
             {
