@@ -3,6 +3,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RigolScopeViewer.Interfaces;
 using RigolScopeViewer.Services.Samplers;
+using RigolScopeViewer.Sources;
+using RigolScopeViewer.Sources.CSV;
+using RigolScopeViewer.Sources.VISA;
 using RigolScopeViewer.ViewModels;
 
 namespace RigolScopeViewer.Services;
@@ -35,6 +38,11 @@ public static class DependencyInjectionExtensions
 
         // Реєструємо пайплайн
         services.AddTransient<IOscilloscopePipeline, OscilloscopePipeline>();
+
+        // Register Waveform Source Factories
+        services.AddTransient<IWaveformSourceFactory, RigolBinSourceFactory>();
+        services.AddTransient<IWaveformSourceFactory, CsvWaveformSourceFactory>();
+        services.AddTransient<IWaveformSourceFactory, VisaWaveformSourceFactory>();
 
         return services;
     }

@@ -51,8 +51,11 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private RenderFrame? _currentFrame; // Дані для нашого рендера
 
+    private readonly IEnumerable<IWaveformSourceFactory> _sourceFactories;
+
     public ObservableCollection<ChannelViewModel> Channels { get; } = [];
     public ICommand OpenCommand { get; }
+    public ICommand CaptureCommand { get; }
     public ICommand ZoomInCommand { get; }
     public ICommand ZoomOutCommand { get; }
 
@@ -82,16 +85,19 @@ public partial class MainViewModel : ViewModelBase
         ILogger<MainViewModel> logger,
         IConfigManager configManager,
         ILoggerFactory loggerFactory,
-        IOscilloscopePipeline pipeline)
+        IOscilloscopePipeline pipeline,
+        IEnumerable<IWaveformSourceFactory> sourceFactories)
     {
         _logger = logger;
         _configManager = configManager;
         _pipeline = pipeline;
         _loggerFactory = loggerFactory;
+        _sourceFactories = sourceFactories;
 
         _logger.LogInformation("MainViewModel initialized");
 
         OpenCommand = new RelayCommand(OpenFile);
+        CaptureCommand = new RelayCommand(Capture);
         ZoomInCommand = new RelayCommand(() => TimePerDivision *= 0.8);
         ZoomOutCommand = new RelayCommand(() => TimePerDivision *= 1.25);
 
@@ -141,30 +147,41 @@ public partial class MainViewModel : ViewModelBase
     {
         _logger?.LogInformation("OpenFile dialog initiated");
 
-        var dlg = new OpenFileDialog();
-        dlg.Filters.Add(new FileDialogFilter
+        var appLifetime = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+        var mainWindow = appLifetime?.MainWindow;
+        if (mainWindow == null) return;
+
+        var fileFactories = _sourceFactories.Where(f => !f.IsCaptureSource).ToList();
+        var extensions = fileFactories.SelectMany(f => f.SupportedExtensions).Select(e => e.TrimStart('.')).ToList();
+
+        var storageProvider = mainWindow.StorageProvider;
+        var result = await storageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
         {
-            Name = "Waveform Files",
-            Extensions = { "bin", "csv" }
+            Title = "Open Waveform File",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new Avalonia.Platform.Storage.FilePickerFileType("Waveform Files")
+                {
+                    Patterns = extensions.Select(e => "*." + e).ToList()
+                }
+            }
         });
 
-        var result = await dlg.ShowAsync(new Window());
-        if (result != null && result.Length > 0)
+        if (result != null && result.Count > 0)
         {
-            var fileName = result[0];
+            var file = result[0];
+            var fileName = file.Path.LocalPath;
+            var ext = Path.GetExtension(fileName).ToLower();
             _logger?.LogInformation("File selected: {FileName}", fileName);
 
             try
             {
-                var binLogger = _loggerFactory?.CreateLogger<RigolBinSource>();
-                var csvLogger = _loggerFactory?.CreateLogger<CsvWaveformSource>();
+                var factory = fileFactories.FirstOrDefault(f => f.SupportedExtensions.Contains(ext));
+                if (factory == null) throw new NotSupportedException("Unsupported file format");
 
-                _currentLoader = Path.GetExtension(fileName).ToLower() switch
-                {
-                    ".bin" => new RigolBinSource(fileName, binLogger),
-                    ".csv" => new CsvWaveformSource(fileName, _configManager ?? throw new InvalidOperationException("ConfigManager not available"), csvLogger),
-                    _ => throw new NotSupportedException("Unsupported file format")
-                };
+                _currentLoader?.Dispose();
+                _currentLoader = factory.CreateSource(fileName);
 
                 _logger?.LogDebug("Created waveform loader for file: {FileName}", fileName);
 
@@ -181,17 +198,55 @@ public partial class MainViewModel : ViewModelBase
                 }
 
                 await RequestNewFrameAsync();
-                //_waveforms = loader.Load(fileName);
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error loading waveform file: {FileName}", fileName);
+                // We should probably show a message box here, but throw for now
                 throw;
             }
         }
         else
         {
             _logger?.LogDebug("File open dialog cancelled");
+        }
+    }
+
+    private async void Capture()
+    {
+        _logger?.LogInformation("Capture initiated");
+
+        var captureFactories = _sourceFactories.Where(f => f.IsCaptureSource).ToList();
+        if (!captureFactories.Any())
+        {
+            _logger?.LogWarning("No capture sources available");
+            return;
+        }
+
+        // For now just pick the first one, or we can prompt later.
+        var factory = captureFactories.First();
+        
+        try
+        {
+            _currentLoader?.Dispose();
+            _currentLoader = factory.CreateSource("VISA_STUB_CONNECTION");
+            await _currentLoader.RunSetupAsync();
+            _logger?.LogInformation("Loaded {ChannelCount} waveforms from capture source", _currentLoader.ChannelCount);
+
+            Channels.Clear();
+            for (int i = 0; i < _currentLoader.ChannelCount; i++)
+            {
+                var meta = _currentLoader.GetMetadata(i);
+                var chVM = new ChannelViewModel(i, meta.ChannelName);
+                chVM.ChannelColor = GetChannelColor(i);
+                Channels.Add(chVM);
+            }
+
+            await RequestNewFrameAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Error starting capture");
         }
     }
 

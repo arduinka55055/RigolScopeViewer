@@ -37,13 +37,33 @@ public class CsvWaveformSource : IWaveformSource
 
     public async Task<bool> RunSetupAsync()
     {
-        // ТУТ МАЄ БУТИ ВИКЛИК AVALONIA ДІАЛОГУ
-        // Наприклад: 
-        // var dialog = new CsvSetupWizard(_config, previewFilePath: _filePath);
-        // bool result = await dialog.ShowDialog(mainWindow);
-        // if (!result) return false;
+        var appLifetime = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+        var mainWindow = appLifetime?.MainWindow;
 
-        // Для симуляції припустимо, що юзер зберіг налаштування:
+        var vm = new RigolScopeViewer.ViewModels.SetupWizardViewModel
+        {
+            ConfigObject = _config,
+            CurrentFilePath = _filePath
+        };
+
+        var dialog = new RigolScopeViewer.Views.SetupWizardWindow
+        {
+            DataContext = vm
+        };
+
+        bool result = false;
+        if (mainWindow != null)
+        {
+            result = await dialog.ShowDialog<bool>(mainWindow);
+        }
+        else
+        {
+            dialog.Show();
+            result = true;
+        }
+
+        if (!result) return false;
+
         _configManager.Save(_config, "csv_config.json");
         _logger?.LogDebug("CSV config saved");
 

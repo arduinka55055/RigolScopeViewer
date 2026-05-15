@@ -19,6 +19,7 @@
     <Menu DockPanel.Dock="Top">
       <MenuItem Header="File">
         <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
+        <MenuItem Header="Capture (VISA)" Command="{Binding CaptureCommand}"/>
         <Separator />
         <MenuItem Header="Exit"/>
       </MenuItem>
@@ -31,6 +32,7 @@
     <!-- Toolbar -->
     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Height="40" Background="#333">
       <Button Content="Open" Command="{Binding OpenCommand}" Margin="5"/>
+      <Button Content="Capture" Command="{Binding CaptureCommand}" Margin="5"/>
       <Separator Margin="5,0" Background="#666" Width="1"/>
       <TextBlock Text="Time/div:" VerticalAlignment="Center" Margin="5,0,0,0" Foreground="White"/>
       <local:UnitNumericUpDown VerticalAlignment="Center" Margin="15,0,0,0" Foreground="White"
