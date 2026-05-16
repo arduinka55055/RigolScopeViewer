@@ -203,8 +203,8 @@ public class ScopeGridControl : Control
             // Draw text for voltage
             if (activeChannel != null)
             {
-                double voltageMax = (4.0 * activeChannel.Scale) + activeChannel.VoltageOffset;
-                double voltageMin = -(4.0 * activeChannel.Scale) + activeChannel.VoltageOffset;
+                double voltageMax = (4.0 * activeChannel.Scale) - activeChannel.VoltageOffset;
+                double voltageMin = -(4.0 * activeChannel.Scale) - activeChannel.VoltageOffset;
 
                 // Value at this division (i = 0 is top, i = VerticalDivisions is bottom)
                 double fraction = 1.0 - (double)i / VerticalDivisions; // 1.0 at top, 0.0 at bottom

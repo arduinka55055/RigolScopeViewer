@@ -53,7 +53,7 @@ public class DpoBinningEngine : IResampler<ColumnStats>
         _logger?.LogDebug("Metadata: StartTime={StartTime}, SampleInterval={SampleInterval}, TotalPoints={TotalPoints}", metadata.StartTime, metadata.SampleInterval, metadata.TotalPoints);
         _logger?.LogDebug("TimeRange: Start={Start}, End={End}", timeRange.Start, timeRange.End);
         _logger?.LogDebug("Calculated visible duration: {VisibleDuration}", visibleDuration);
-        
+
 
         // Скільки секунд реального часу "вміщується" в одну колонку (один піксель)
         var binWidthTime = visibleDuration / numBins;

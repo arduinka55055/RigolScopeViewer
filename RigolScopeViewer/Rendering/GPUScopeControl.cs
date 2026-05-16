@@ -46,6 +46,7 @@ public class GPUScopeControl : Control
     private float _intensity = 2.0f;
     private bool _isDragging = false;
     private Point? _lastMousePosition;
+    private int _lastReportedScreenWidthPx = 0;
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
@@ -74,6 +75,30 @@ public class GPUScopeControl : Control
             _pan = new(0.0, 0.0);
             _zoom = new(1.0, 1.0);
             InvalidateVisual();
+        }
+        else if (change.Property == BoundsProperty || change.Property == UpdateViewportCommandProperty)
+        {
+            UpdateScreenWidth();
+        }
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        UpdateScreenWidth();
+    }
+
+    private void UpdateScreenWidth()
+    {
+        var width = (int)Math.Floor(Bounds.Width);
+        if (width <= 0 || width == _lastReportedScreenWidthPx)
+            return;
+
+        _lastReportedScreenWidthPx = width;
+        var args = new ViewportChangeParams(0.0, 1.0, width);
+        if (UpdateViewportCommand?.CanExecute(args) == true)
+        {
+            UpdateViewportCommand.Execute(args);
         }
     }
 
@@ -132,8 +157,8 @@ public class GPUScopeControl : Control
         {
             if (channel == null || !channel.IsVisible || channel.CurrentFrame == null) continue;
 
-            var voltageMin = -(4.0f * channel.Scale) + channel.VoltageOffset;
-            var voltageMax = (4.0f * channel.Scale) + channel.VoltageOffset;
+            var voltageMin = -(4.0f * channel.Scale) - channel.VoltageOffset;
+            var voltageMax = (4.0f * channel.Scale) - channel.VoltageOffset;
             var channelVoltage = new VoltageRange(voltageMin, voltageMax);
 
             context.Custom(new DpoDrawOperation(
@@ -175,14 +200,15 @@ public class GPUScopeControl : Control
             bool handledVertical = false;
             if (Math.Abs(deltaY) > 0 && Channels != null)
             {
-                var activeChannel = Channels.FirstOrDefault(c => c.IsActive && c.IsVisible);
+                var activeChannel = Channels.FirstOrDefault(c => c.IsActive && c.IsVisible)
+                    ?? Channels.FirstOrDefault(c => c.IsVisible);
                 if (activeChannel != null)
                 {
                     // DeltaY > 0 means moving mouse down, which visually means the signal moves down
                     // Signal moves down -> VoltageOffset increases
                     double panPercentY = deltaY / Bounds.Height;
                     double totalVoltage = activeChannel.Scale * 8.0; // 8 vertical divisions
-                    activeChannel.VoltageOffset += (float)(totalVoltage * panPercentY);
+                    activeChannel.VoltageOffset -= (float)(totalVoltage * panPercentY);
                     handledVertical = true;
                 }
             }
@@ -245,10 +271,10 @@ public class GPUScopeControl : Control
 
         if (isVoltageZoom)
         {
-            // ... (ваш код для VoltageZoom залишається без змін)
             if (Channels != null)
             {
-                var activeChannel = Channels.FirstOrDefault(c => c.IsActive && c.IsVisible);
+                var activeChannel = Channels.FirstOrDefault(c => c.IsActive && c.IsVisible)
+                    ?? Channels.FirstOrDefault(c => c.IsVisible);
                 if (activeChannel != null)
                 {
                     double panPercentY = (point.Y / Bounds.Height) * (1.0 - renderZoom) / renderZoom;
