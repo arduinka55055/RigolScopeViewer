@@ -145,25 +145,8 @@ public class RigolBinSource : IWaveformSource
         var meta = _metadata[channelIndex];
         var data = _channelData[channelIndex];
 
-        // Конвертуємо час у індекси масиву
-        var startIndex = (int)((timeRange.Start - meta.StartTime) / meta.SampleInterval);
-        var endIndex = (int)((timeRange.End - meta.StartTime) / meta.SampleInterval);
 
-        startIndex = Math.Clamp(startIndex, 0, data.Length);
-        endIndex = Math.Clamp(endIndex, startIndex, data.Length);
-
-        ReadOnlySpan<float> slice;
-        if (endIndex > startIndex)
-        {
-
-            slice = data.AsSpan(startIndex, endIndex - startIndex);
-        }
-        else
-        {
-            slice = data.AsSpan();
-        }
-
-        processor(slice, meta, cancellationToken);
+        processor(data.AsSpan(), meta, cancellationToken);
     }
 
     public void Start()

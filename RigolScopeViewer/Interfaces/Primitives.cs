@@ -1,5 +1,6 @@
 ﻿// 1. Сирі дані з VISA/CSV
 using System;
+using System.Runtime.InteropServices;
 
 public readonly struct SignalPoint
 {
@@ -10,14 +11,20 @@ public readonly struct SignalPoint
 }
 
 // 2. Результат біннінгу (підготовлено для рендеру)
+[StructLayout(LayoutKind.Sequential)]
 public readonly struct ColumnStats
 {
     public readonly Half Mean;
-    public readonly Half StdDev;
+    public readonly Half Min;
+    public readonly Half Max;
+    public readonly Half Alpha; // ПАДДІНГ: Робить структуру рівно 8 байт!
 
-    public ColumnStats(float mean, float stdDev)
+    public ColumnStats(float mean, float min, float max, float alpha = 1f)
     {
-        (Mean, StdDev) = ((Half)mean, (Half)stdDev);
+        Mean = (Half)mean;
+        Min = (Half)min;
+        Max = (Half)max;
+        Alpha = (Half)alpha;
     }
 }
 

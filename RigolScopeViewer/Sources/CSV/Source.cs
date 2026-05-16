@@ -199,7 +199,7 @@ public class CsvWaveformSource : IWaveformSource
         endIndex = Math.Clamp(endIndex, startIndex, data.Length);
 
         // Магія Zero-Allocation! Віддаємо лише шматочок масиву через Span.
-        ReadOnlySpan<float> slice = data.AsSpan(startIndex, endIndex - startIndex);
+        ReadOnlySpan<float> slice = data.AsSpan();//(startIndex, endIndex - startIndex);
 
         processor(slice, meta, cancellationToken);
     }

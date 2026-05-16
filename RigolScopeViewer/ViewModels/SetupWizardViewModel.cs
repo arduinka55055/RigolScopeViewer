@@ -23,32 +23,55 @@ public partial class InspectorPropertyViewModel : ViewModelBase
         get => _property.GetValue(_target);
         set
         {
-            if (_property.CanWrite)
-            {
-                try
-                {
-                    object? converted = null;
-                    if (_property.PropertyType.IsEnum)
-                    {
-                        if (value != null)
-                            converted = Enum.Parse(_property.PropertyType, value.ToString()!);
-                    }
-                    else if (_property.PropertyType == typeof(bool) && value is bool b)
-                    {
-                        converted = b;
-                    }
-                    else if (value != null)
-                    {
-                        converted = Convert.ChangeType(value, _property.PropertyType);
-                    }
+            if (!_property.CanWrite) return;
 
-                    if (converted != null || !PropertyType.IsValueType)
-                    {
-                        _property.SetValue(_target, converted);
-                        OnPropertyChanged(nameof(Value));
-                    }
+            try
+            {
+                object? converted = null;
+
+                if (value == null)
+                {
+                    // For non-nullable value types, do nothing or assign a specific default
+                    if (_property.PropertyType.IsValueType && Nullable.GetUnderlyingType(_property.PropertyType) == null)
+                        return; // or set to 0, but better to ignore
                 }
-                catch { /* Ignore invalid conversions */ }
+                else if (_property.PropertyType.IsEnum)
+                {
+                    converted = Enum.Parse(_property.PropertyType, value.ToString()!);
+                }
+                else if (_property.PropertyType == typeof(bool) && value is bool b)
+                {
+                    converted = b;
+                }
+                else if (_property.PropertyType == typeof(int))
+                {
+                    if (int.TryParse(value.ToString(), out int intVal))
+                        converted = intVal;
+                    else
+                        return; // ignore invalid input
+                }
+                else if (_property.PropertyType == typeof(double))
+                {
+                    if (double.TryParse(value.ToString(), out double dblVal))
+                        converted = dblVal;
+                    else
+                        return;
+                }
+                // Add other numeric types as needed
+                else if (value != null)
+                {
+                    converted = Convert.ChangeType(value, _property.PropertyType);
+                }
+
+                if (converted != null || !_property.PropertyType.IsValueType)
+                {
+                    _property.SetValue(_target, converted);
+                    OnPropertyChanged(nameof(Value));
+                }
+            }
+            catch
+            {
+                // Log if necessary, but ignore conversion failures
             }
         }
     }

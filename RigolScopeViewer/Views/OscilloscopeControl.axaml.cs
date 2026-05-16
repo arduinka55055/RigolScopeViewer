@@ -104,8 +104,8 @@ public class ScopeGridControl : Control
 
     private void Channel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ChannelViewModel.IsVisible) || 
-            e.PropertyName == nameof(ChannelViewModel.Scale) || 
+        if (e.PropertyName == nameof(ChannelViewModel.IsVisible) ||
+            e.PropertyName == nameof(ChannelViewModel.Scale) ||
             e.PropertyName == nameof(ChannelViewModel.VoltageOffset) ||
             e.PropertyName == nameof(ChannelViewModel.IsActive) ||
             e.PropertyName == nameof(ChannelViewModel.ChannelColor))
@@ -146,7 +146,7 @@ public class ScopeGridControl : Control
 
         var pen = new Pen(new SolidColorBrush(Color.FromArgb(100, 255, 255, 255)), 1);
         var tickPen = new Pen(new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)), 1);
-        
+
         var typeface = new Typeface("Arial");
 
         double colWidth = bounds.Width / HorizontalDivisions;
@@ -162,7 +162,7 @@ public class ScopeGridControl : Control
             context.DrawLine(pen, new Point(x, 0), new Point(x, bounds.Height));
 
             // Draw text for time
-            double timeValue = TimeOffset + (i * TimePerDivision);
+            double timeValue = TimeOffset + (i * TimePerDivision) - TimePerDivision * 5;
             var textFormat = FormatSI(timeValue, "s");
             var ft = new FormattedText(
                 textFormat,
@@ -205,7 +205,7 @@ public class ScopeGridControl : Control
             {
                 double voltageMax = (4.0 * activeChannel.Scale) + activeChannel.VoltageOffset;
                 double voltageMin = -(4.0 * activeChannel.Scale) + activeChannel.VoltageOffset;
-                
+
                 // Value at this division (i = 0 is top, i = VerticalDivisions is bottom)
                 double fraction = 1.0 - (double)i / VerticalDivisions; // 1.0 at top, 0.0 at bottom
                 double voltageValue = voltageMin + fraction * (voltageMax - voltageMin);

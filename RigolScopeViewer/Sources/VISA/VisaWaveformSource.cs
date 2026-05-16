@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using RigolScopeViewer.Interfaces;
 using System;
 using System.Collections.Generic;
@@ -64,10 +64,10 @@ public class VisaWaveformSource : IWaveformSource
         try
         {
             using var client = new ScpiClient(_config.IpAddress, _config.Port, _config.TimeoutMs);
-            
+
             string idn = await client.QueryStringAsync("*IDN?");
             _logger?.LogInformation("Connected to: {Idn}", idn.Trim());
-            
+
             var tempChannels = new List<float[]>();
             var tempMetadata = new List<WaveformMetadata>();
 
@@ -80,7 +80,7 @@ public class VisaWaveformSource : IWaveformSource
                 await client.WriteAsync($":WAVeform:SOURce CHANnel{ch}");
                 await client.WriteAsync(":WAVeform:FORMat BYTE");
                 await client.WriteAsync(":WAVeform:MODE NORMal");
-                
+
                 string preambleStr = await client.QueryStringAsync(":WAVeform:PREamble?");
                 var vals = preambleStr.Split(',');
                 if (vals.Length < 10) continue;
@@ -94,7 +94,7 @@ public class VisaWaveformSource : IWaveformSource
                 float yreference = float.Parse(vals[9], System.Globalization.CultureInfo.InvariantCulture);
 
                 byte[] rawData = await client.QueryBinaryValuesAsync(":WAVeform:DATA?");
-                
+
                 float[] voltage = new float[rawData.Length];
                 for (int i = 0; i < rawData.Length; i++)
                 {
@@ -110,7 +110,7 @@ public class VisaWaveformSource : IWaveformSource
                     TotalPoints = voltage.Length
                 });
             }
-            
+
             _channelData = tempChannels.ToArray();
             _metadata = tempMetadata.ToArray();
             _channelCount = _channelData.Length;
@@ -143,7 +143,7 @@ public class VisaWaveformSource : IWaveformSource
         startIndex = Math.Clamp(startIndex, 0, data.Length);
         endIndex = Math.Clamp(endIndex, startIndex, data.Length);
 
-        ReadOnlySpan<float> slice = data.AsSpan(startIndex, endIndex - startIndex);
+        ReadOnlySpan<float> slice = data.AsSpan();//(startIndex, endIndex - startIndex);
         processor(slice, meta, cancellationToken);
     }
 

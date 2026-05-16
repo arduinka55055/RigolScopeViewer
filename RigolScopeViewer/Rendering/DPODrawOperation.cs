@@ -17,17 +17,6 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 
-
-[StructLayout(LayoutKind.Sequential, Pack = 4)]
-public readonly struct ColumnStatsOLd(float mean, float stdDev)
-{
-    public readonly Half Mean = (Half)mean;    // Поле R в текстурі
-    public readonly Half StdDev = (Half)stdDev;  // Поле G в текстурі
-    public readonly Half Pad1 = (Half)0f;    // Поле B
-    public readonly Half Pad2 = (Half)1f;    // Поле A
-}
-
-
 public class DpoDrawOperation : ICustomDrawOperation
 {
     private static readonly string shaderContents = Assembly.GetExecutingAssembly().GetManifestResourceStream("RigolScopeViewer.Shaders.DpoShader.glsl") switch
@@ -148,7 +137,7 @@ public class DpoDrawOperation : ICustomDrawOperation
         {
             _dataBitmap?.Dispose();
             // RgbaF32: 4 float-канали на піксель = ідеально для наших даних
-            var info = new SKImageInfo(width, 1, SKColorType.RgF16, SKAlphaType.Unpremul, SKColorSpace.CreateSrgbLinear());
+            var info = new SKImageInfo(width, 1, SKColorType.RgbaF16, SKAlphaType.Unpremul, SKColorSpace.CreateSrgbLinear());
             _dataBitmap = new SKBitmap(info);
             _cachedWidth = width;
         }

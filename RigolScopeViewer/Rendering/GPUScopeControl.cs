@@ -98,14 +98,16 @@ public class GPUScopeControl : Control
 
     private void Channel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ChannelViewModel.IsVisible) || 
-            e.PropertyName == nameof(ChannelViewModel.Scale) || 
+        if (e.PropertyName == nameof(ChannelViewModel.IsVisible) ||
+            e.PropertyName == nameof(ChannelViewModel.Scale) ||
             e.PropertyName == nameof(ChannelViewModel.VoltageOffset))
         {
             InvalidateVisual();
         }
         else if (e.PropertyName == nameof(ChannelViewModel.CurrentFrame))
         {
+            // Після того, як ViewModel прислала нові дані (вони вже правильно зумовані і зміщені),
+            // ми скидаємо наш візуальний натяг
             _pan = new(0.0, _pan.Y);
             _zoom = new(1.0, _zoom.Y);
             _uncommittedPanX = 0;
@@ -130,7 +132,6 @@ public class GPUScopeControl : Control
         {
             if (channel == null || !channel.IsVisible || channel.CurrentFrame == null) continue;
 
-            // Apply channel-specific voltage range/offset
             var voltageMin = -(4.0f * channel.Scale) + channel.VoltageOffset;
             var voltageMax = (4.0f * channel.Scale) + channel.VoltageOffset;
             var channelVoltage = new VoltageRange(voltageMin, voltageMax);
@@ -202,6 +203,7 @@ public class GPUScopeControl : Control
         }
     }
 
+
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
@@ -212,7 +214,10 @@ public class GPUScopeControl : Control
             _lastMousePosition = null;
             e.Pointer.Capture(null);
 
-            double panPercent = _uncommittedPanX / Bounds.Width;
+            // ФІКС 1: ПОТРІБНО ділення на _zoom.X!
+            // Якщо текстура вже увеличена (_zoom.X > 1.0), то рух мишки відповідає меншій часовій зміні.
+            // 100 пікселів на екрані * 2x зум = тільки 50 пікселів часових даних
+            double panPercent = (_uncommittedPanX / Math.Floor(Bounds.Width)) / _zoom.X;
             _uncommittedPanX = 0;
 
             if (Math.Abs(panPercent) > 0.0001)
@@ -233,9 +238,6 @@ public class GPUScopeControl : Control
 
         var point = e.GetCurrentPoint(this).Position;
 
-        // Scrolling up (Delta.Y > 0) means Zoom In.
-        // Visually, the rendered waveform should stretch and become larger (renderZoom > 1.0).
-        // Data-wise, the time window we load should shrink (dataZoom < 1.0).
         double renderZoom = Math.Pow(1.25, e.Delta.Y);
         double dataZoom = 1.0 / renderZoom;
 
@@ -243,19 +245,18 @@ public class GPUScopeControl : Control
 
         if (isVoltageZoom)
         {
-            // Update active channel's Scale and VoltageOffset instead of visual _zoom.Y
+            // ... (ваш код для VoltageZoom залишається без змін)
             if (Channels != null)
             {
                 var activeChannel = Channels.FirstOrDefault(c => c.IsActive && c.IsVisible);
                 if (activeChannel != null)
                 {
                     double panPercentY = (point.Y / Bounds.Height) * (1.0 - renderZoom) / renderZoom;
-                    double totalVoltage = activeChannel.Scale * 8.0; // 8 vertical divisions usually
-                    
-                    // Center around the mouse pointer
+                    double totalVoltage = activeChannel.Scale * 8.0;
+
                     activeChannel.VoltageOffset += (float)(totalVoltage * panPercentY);
                     activeChannel.Scale *= (float)dataZoom;
-                    
+
                     if (activeChannel.VoltageOffset > 10000f) activeChannel.VoltageOffset = 10000f;
                     if (activeChannel.VoltageOffset < -10000f) activeChannel.VoltageOffset = -10000f;
                     if (activeChannel.Scale > 10000f) activeChannel.Scale = 10000f;
@@ -265,22 +266,26 @@ public class GPUScopeControl : Control
         }
         else
         {
-            // Visual zoom for time (X axis) - keeping the mouse X position anchored
-            double newPanX = point.X - (point.X - _pan.X) * renderZoom;
-            _pan = new(newPanX, _pan.Y);
-            _zoom = new(_zoom.X * renderZoom, _zoom.Y);
+            // 1. МИТТЄВИЙ ВІЗУАЛЬНИЙ ЗУМ 
+            double oldZoomX = _zoom.X;
+            double oldPanX = _pan.X;
+            double newZoomX = oldZoomX * renderZoom;
 
-            // Calculate how much to shift the time offset so the data under the mouse pointer remains stable.
-            // MainViewModel will calculate: TimeOffset_new = TimeOffset_old + TotalNewScreenTime * panPercent
-            double panPercent = (point.X / Bounds.Width) * (1.0 - dataZoom) / dataZoom;
+            double newPanX = point.X - (point.X - oldPanX) * renderZoom;
+
+            _zoom = new ViewportZoom(newZoomX, _zoom.Y);
+            _pan = new ViewportPan(newPanX, _pan.Y);
+            InvalidateVisual();
+
+            // ФІКС 2: Повернули вашу ідеальну формулу з / dataZoom
+            double cursorRatio = point.X / Bounds.Width;
+            double panPercent = (cursorRatio - 0.5) * (1.0 - dataZoom) / dataZoom;
+
             var args = new ViewportChangeParams(panPercent, dataZoom, (int)Bounds.Width);
-
             if (UpdateViewportCommand?.CanExecute(args) == true)
             {
                 UpdateViewportCommand.Execute(args);
             }
         }
-
-        InvalidateVisual();
     }
 }

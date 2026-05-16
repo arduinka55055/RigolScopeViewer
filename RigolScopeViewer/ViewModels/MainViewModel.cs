@@ -1,4 +1,4 @@
-using Avalonia.Controls;
+﻿using Avalonia.Controls;
 using CommunityToolkit.Mvvm.Input;
 using RigolScopeViewer.Models;
 using RigolScopeViewer.Services;
@@ -50,6 +50,9 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     private RenderFrame? _currentFrame; // Дані для нашого рендера
+
+    [ObservableProperty]
+    private IWaveformSource? _waveformSource;
 
     private readonly IEnumerable<IWaveformSourceFactory> _sourceFactories;
 
@@ -110,32 +113,29 @@ public partial class MainViewModel : ViewModelBase
         _isUpdatingViewport = true;
         try
         {
-            // 1. Оновлюємо час на основі зуму (ZoomIn = менше секунд на екран)
+            // 1. СПОЧАТКУ застосовуємо зум
             if (args.ZoomFactor != 1.0)
             {
-                // Беремо твій поточний TimePerDivision і множимо
                 TimePerDivision *= args.ZoomFactor;
-                
-                // Constraints so we don't zoom out to infinity
+
+                // Захист від нескінченного зуму
                 if (TimePerDivision > 10000.0) TimePerDivision = 10000.0;
                 if (TimePerDivision < 1e-9) TimePerDivision = 1e-9;
             }
 
-            // 2. Оновлюємо зміщення на основі панорамування (Pan)
+            // 2. ПОТІМ рахуємо зміщення (використовуючи ВЖЕ НОВИЙ час екрану)
             if (args.PanPercent != 0.0)
             {
-                // Загальний час на екрані = TimePerDivision * 10 (якщо 10 клітинок)
+                // 10 клітинок екрану
                 double totalScreenTime = TimePerDivision * 10.0;
-
-                // Зміщуємо стартовий час на відповідну кількість секунд
                 TimeOffset += totalScreenTime * args.PanPercent;
-                
-                // Constraint so we don't pan to infinity
+
+                // Захист. Краще залишити його дуже широким, 
+                // щоб DpoBinningEngine міг спокійно малювати порожнечу за краями файлу.
                 if (TimeOffset > 100000.0) TimeOffset = 100000.0;
                 if (TimeOffset < -100000.0) TimeOffset = -100000.0;
             }
 
-            // 3. Оноалюємо ширину екрану в пікселях (це потрібно для правильного ресемплінгу)
             if (args.ScreenWidthPx > 0)
             {
                 ScreenWidthPx = args.ScreenWidthPx;
@@ -146,7 +146,6 @@ public partial class MainViewModel : ViewModelBase
             _isUpdatingViewport = false;
         }
 
-        // 4. Запитуємо новий кадр (твоя функція з Task.Run та IResampler)
         _ = RequestNewFrameAsync();
     }
 
@@ -190,6 +189,7 @@ public partial class MainViewModel : ViewModelBase
 
                 _currentLoader?.Dispose();
                 _currentLoader = factory.CreateSource(fileName);
+                WaveformSource = _currentLoader;
 
                 _logger?.LogDebug("Created waveform loader for file: {FileName}", fileName);
 
@@ -233,11 +233,12 @@ public partial class MainViewModel : ViewModelBase
 
         // For now just pick the first one, or we can prompt later.
         var factory = captureFactories.First();
-        
+
         try
         {
             _currentLoader?.Dispose();
             _currentLoader = factory.CreateSource("VISA_STUB_CONNECTION");
+            WaveformSource = _currentLoader;
             await _currentLoader.RunSetupAsync();
             _logger?.LogInformation("Loaded {ChannelCount} waveforms from capture source", _currentLoader.ChannelCount);
 
@@ -271,9 +272,10 @@ public partial class MainViewModel : ViewModelBase
         IsBusy = true; // Показуємо загрузку
 
         // Створюємо Viewport на основі твоїх налаштувань UI
-        var timeEnd = TimeOffset + (TimePerDivision * 10); // Наприклад, 10 клітинок на екрані
+        var offset2 = TimeOffset + (TimePerDivision * -5);
+        var timeEnd = offset2 + (TimePerDivision * 10); // Наприклад, 10 клітинок на екрані
         var viewport = new ViewportState(
-            Time: new TimeRange(TimeOffset, timeEnd),
+            Time: new TimeRange(offset2, timeEnd),
             Voltage: new VoltageRange(-5f, 5f), // Це можна брати з налаштувань каналу
             Pan: new ViewportPan(0, 0), // Pan is handled by GPU control now
             Zoom: new ViewportZoom(1.0, 1.0), // Zoom is handled by GPU control now

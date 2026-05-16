@@ -26,7 +26,7 @@ public static class DependencyInjectionExtensions
         services.AddLogging(builder =>
         {
             builder.AddConsole();
-            builder.SetMinimumLevel(LogLevel.Information);
+            builder.SetMinimumLevel(LogLevel.Trace);
             configureLogging?.Invoke(builder);
         });
 
@@ -34,7 +34,8 @@ public static class DependencyInjectionExtensions
         services.AddSingleton<IConfigManager, ConfigManager>();
 
         // Add resampling/binning engine
-        services.AddSingleton<IResampler<ColumnStats>, DpoBinningEngine>();
+        services.AddSingleton<IResampler<ColumnStats>, DpoBinningEnginePLINQ>();
+        //services.AddSingleton<IResampler<ColumnStats>, DpoBinningEngine>();
 
         // Реєструємо пайплайн
         services.AddTransient<IOscilloscopePipeline, OscilloscopePipeline>();
