@@ -16,9 +16,11 @@ using RigolScopeViewer.Interfaces;
 using Microsoft.Extensions.Logging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Threading.Tasks;
+using System.Threading;
+using RigolScopeViewer.Sources.VISA;
+using Avalonia.Threading; // Додано для безпечного виклику UI з бекграунду
 
 namespace RigolScopeViewer.ViewModels;
-
 
 public partial class MainViewModel : ViewModelBase
 {
@@ -29,12 +31,6 @@ public partial class MainViewModel : ViewModelBase
     private double _timeOffset;
 
     [ObservableProperty]
-    private double _triggerLevel;
-
-    [ObservableProperty]
-    private bool _showTrigger = true;
-
-    [ObservableProperty]
     private int _screenWidthPx = 800; // Default fallback width
 
     private readonly ILogger<MainViewModel> _logger;
@@ -43,7 +39,7 @@ public partial class MainViewModel : ViewModelBase
 
     private readonly IOscilloscopePipeline _pipeline;
     private IWaveformSource? _currentLoader;
-    private System.Threading.CancellationTokenSource? _renderCts;
+    private CancellationTokenSource? _renderCts;
 
     [ObservableProperty]
     private bool _isBusy; // Прив'яжи це до <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
@@ -51,6 +47,7 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private RenderFrame? _currentFrame; // Дані для нашого рендера
 
+    // Саме цю властивість ти забіндиш в XAML до ContentControl, щоб показувати кнопки плагіна!
     [ObservableProperty]
     private IWaveformSource? _waveformSource;
 
@@ -82,7 +79,6 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Constructor for dependency injection.
-    /// Parameters can be null for backward compatibility/testing.
     /// </summary>
     public MainViewModel(
         ILogger<MainViewModel> logger,
@@ -103,35 +99,61 @@ public partial class MainViewModel : ViewModelBase
         CaptureCommand = new RelayCommand(Capture);
         ZoomInCommand = new RelayCommand(() => TimePerDivision *= 0.8);
         ZoomOutCommand = new RelayCommand(() => TimePerDivision *= 1.25);
-
     }
 
-    // Команда, яку викликає GPUScopeControl при відпусканні миші або скролі
+    // --- КЕРУВАННЯ ПЛАГІНАМИ (Підписка на DataReady) ---
+
+    private void SetCurrentLoader(IWaveformSource? newLoader)
+    {
+        // 1. Обов'язково відписуємось від старого лоадера, щоб збирач сміття (GC) міг його видалити
+        if (_currentLoader != null)
+        {
+            _currentLoader.DataReady -= OnLoaderDataReady;
+            _currentLoader.Dispose();
+        }
+
+        // 2. Встановлюємо новий
+        _currentLoader = newLoader;
+        WaveformSource = _currentLoader; // Оновлюємо UI (покаже/сховає ControlPanelViewModel)
+
+        // 3. Підписуємось на події нового лоадера
+        if (_currentLoader != null)
+        {
+            _currentLoader.DataReady += OnLoaderDataReady;
+        }
+    }
+
+    private void OnLoaderDataReady(object? sender, EventArgs e)
+    {
+        // Цей метод викликається з ФОНОВОГО потоку (з циклу VISA).
+        // Оскільки RequestNewFrameAsync змінює ObservableCollection та IsBusy (які прив'язані до UI),
+        // ми зобов'язані перекинути виконання в UI-потік через Dispatcher!
+        Dispatcher.UIThread.Post(() =>
+        {
+            _ = RequestNewFrameAsync();
+        });
+    }
+
+    // ---------------------------------------------------
+
     [RelayCommand]
     private void ChangeViewport(ViewportChangeParams args)
     {
         _isUpdatingViewport = true;
         try
         {
-            // 1. СПОЧАТКУ застосовуємо зум
             if (args.ZoomFactor != 1.0)
             {
                 TimePerDivision *= args.ZoomFactor;
-
-                // Захист від нескінченного зуму
                 if (TimePerDivision > 10000.0) TimePerDivision = 10000.0;
                 if (TimePerDivision < 1e-9) TimePerDivision = 1e-9;
             }
 
-            // 2. ПОТІМ рахуємо зміщення (використовуючи ВЖЕ НОВИЙ час екрану)
             if (args.PanPercent != 0.0)
             {
-                // 10 клітинок екрану
                 double totalScreenTime = TimePerDivision * 10.0;
                 TimeOffset += totalScreenTime * args.PanPercent;
 
-                // Захист. Краще залишити його дуже широким, 
-                // щоб DpoBinningEngine міг спокійно малювати порожнечу за краями файлу.
                 if (TimeOffset > 100000.0) TimeOffset = 100000.0;
                 if (TimeOffset < -100000.0) TimeOffset = -100000.0;
             }
@@ -148,7 +170,6 @@ public partial class MainViewModel : ViewModelBase
 
         _ = RequestNewFrameAsync();
     }
-
 
     private async void OpenFile()
     {
@@ -187,13 +208,13 @@ public partial class MainViewModel : ViewModelBase
                 var factory = fileFactories.FirstOrDefault(f => f.SupportedExtensions.Contains(ext));
                 if (factory == null) throw new NotSupportedException("Unsupported file format");
 
-                _currentLoader?.Dispose();
-                _currentLoader = factory.CreateSource(fileName);
-                WaveformSource = _currentLoader;
+                // Використовуємо новий метод для безпечної заміни лоадера
+                var newLoader = factory.CreateSource(fileName);
+                SetCurrentLoader(newLoader);
 
                 _logger?.LogDebug("Created waveform loader for file: {FileName}", fileName);
 
-                await _currentLoader.RunSetupAsync();
+                await _currentLoader!.RunSetupAsync();
                 _logger?.LogInformation("Loaded {ChannelCount} waveforms", _currentLoader.ChannelCount);
 
                 Channels.Clear();
@@ -210,7 +231,6 @@ public partial class MainViewModel : ViewModelBase
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error loading waveform file: {FileName}", fileName);
-                // We should probably show a message box here, but throw for now
                 throw;
             }
         }
@@ -231,15 +251,15 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        // For now just pick the first one, or we can prompt later.
         var factory = captureFactories.First();
 
         try
         {
-            _currentLoader?.Dispose();
-            _currentLoader = factory.CreateSource("VISA_STUB_CONNECTION");
-            WaveformSource = _currentLoader;
-            await _currentLoader.RunSetupAsync();
+            // Використовуємо новий метод для безпечної заміни лоадера
+            var newLoader = factory.CreateSource("VISA_STUB_CONNECTION");
+            SetCurrentLoader(newLoader);
+
+            await _currentLoader!.RunSetupAsync();
             _logger?.LogInformation("Loaded {ChannelCount} waveforms from capture source", _currentLoader.ChannelCount);
 
             Channels.Clear();
@@ -259,32 +279,25 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-
-
     private async Task RequestNewFrameAsync()
     {
         if (_currentLoader == null) return;
 
         _renderCts?.Cancel();
-        _renderCts = new System.Threading.CancellationTokenSource();
+        _renderCts = new CancellationTokenSource();
         var token = _renderCts.Token;
 
         IsBusy = true; // Показуємо загрузку
 
-        // Створюємо Viewport на основі твоїх налаштувань UI
         var offset2 = TimeOffset + (TimePerDivision * -5);
-        var timeEnd = offset2 + (TimePerDivision * 10); // Наприклад, 10 клітинок на екрані
+        var timeEnd = offset2 + (TimePerDivision * 10);
         var viewport = new ViewportState(
             Time: new TimeRange(offset2, timeEnd),
-            Voltage: new VoltageRange(-5f, 5f), // Це можна брати з налаштувань каналу
-            Pan: new ViewportPan(0, 0), // Pan is handled by GPU control now
-            Zoom: new ViewportZoom(1.0, 1.0), // Zoom is handled by GPU control now
-            ScreenWidthPx: ScreenWidthPx // Це можна брати з ActualWidth контрола
+            Voltage: new VoltageRange(-5f, 5f),
+            Pan: new ViewportPan(0, 0),
+            Zoom: new ViewportZoom(1.0, 1.0),
+            ScreenWidthPx: ScreenWidthPx
         );
-
-        // ВАЖЛИВО: Span не може перетинати потоки. Тому ми запускаємо Task.Run,
-        // всередині якого викликаємо лоадер. Лоадер дає Span, ми віддаємо його в пайплайн,
-        // і результат (RenderFrame) повертаємо в UI потік. ZERO COPY!
 
         try
         {
@@ -307,8 +320,6 @@ public partial class MainViewModel : ViewModelBase
                 return results;
             }, token);
 
-            // Prevent race condition: If a new viewport change occurred while Task.Run was finishing,
-            // we MUST discard this stale frame to avoid resetting the visual pan/zoom prematurely!
             token.ThrowIfCancellationRequested();
 
             for (int i = 0; i < Channels.Count; i++)
@@ -323,7 +334,6 @@ public partial class MainViewModel : ViewModelBase
         }
         finally
         {
-            // Only set IsBusy = false if this is still the active token (not overridden by a newer request)
             if (!token.IsCancellationRequested)
             {
                 IsBusy = false; // Вимикаємо загрузку

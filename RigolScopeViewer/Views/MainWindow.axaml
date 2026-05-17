@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:RigolScopeViewer.ViewModels"
         xmlns:local="using:RigolScopeViewer"
+        xmlns:visa="clr-namespace:RigolScopeViewer.Sources.VISA"
         mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
         x:Class="RigolScopeViewer.MainWindow"
         Icon="/Assets/avalonia-logo.ico"
@@ -36,25 +37,46 @@
       <Separator Margin="5,0" Background="#666" Width="1"/>
       <TextBlock Text="Time/div:" VerticalAlignment="Center" Margin="5,0,0,0" Foreground="White"/>
       <local:UnitNumericUpDown VerticalAlignment="Center" Margin="15,0,0,0" Foreground="White"
-        BaseValue="{Binding TimePerDivision}"
-        UnitSymbol="s"
-        />
+                               BaseValue="{Binding TimePerDivision}"
+                               UnitSymbol="s"
+                               />
 
       <TextBlock Text="Offset:" VerticalAlignment="Center" Margin="15,0,0,0" Foreground="White"/>
       <local:UnitNumericUpDown VerticalAlignment="Center" Margin="15,0,0,0" Foreground="White"
-        BaseValue="{Binding TimeOffset}"
-        IncrementType="Step" Step="{Binding TimePerDivision}"
-        UnitSymbol="s"
-        />
+                               BaseValue="{Binding TimeOffset}"
+                               IncrementType="Step" Step="{Binding TimePerDivision}"
+                               UnitSymbol="s"
+                               />
 
-      <TextBlock Text="Trigger:" VerticalAlignment="Center" Margin="15,0,0,0" Foreground="White"/>
-      <TextBox Text="{Binding TriggerLevel}" Width="60" Margin="5,0,5,0"/>
-      <TextBlock Text="V" VerticalAlignment="Center" Foreground="White"/>
-      <CheckBox Content="Show" IsChecked="{Binding ShowTrigger}" Margin="5,0,5,0" VerticalAlignment="Center"/>
 
-      
-      
-      
+      <ContentControl Content="{Binding WaveformSource.ControlPanelViewModel}" Margin="15,0,0,0" VerticalAlignment="Center">
+
+        <!-- Шаблон для малювання кнопок VISA -->
+        <ContentControl.DataTemplates>
+          <DataTemplate DataType="visa:VisaControlViewModel">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+
+              <Button Command="{Binding StartCommand}"
+                      IsEnabled="{Binding !IsRunning}"
+                      Content="▶ Live View" />
+
+              <Button Command="{Binding StopCommand}"
+                      IsEnabled="{Binding IsRunning}"
+                      Content="⏹ Stop"
+                      Background="#AA0000" Foreground="White" />
+
+              <Button Command="{Binding ResetConnectionCommand}"
+                      Content="🔄 Reset" />
+
+            </StackPanel>
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+
+      </ContentControl>
+
+
+
+
     </StackPanel>
 
 
@@ -70,7 +92,7 @@
 
       <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
     </StackPanel>
-    
+
     <!-- Main Content -->
     <Grid Background="LightGray">
       <Grid.ColumnDefinitions>
@@ -114,14 +136,14 @@
                     <TextBlock Text="V/div:" Grid.Row="0" Grid.Column="0"
                                VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <local:UnitNumericUpDown Grid.Row="0" Grid.Column="1" Width="300" HorizontalAlignment="Left" Margin="0,5,0,0"
-                      BaseValue="{Binding Scale}" UnitSymbol="V"/>
+                                             BaseValue="{Binding Scale}" UnitSymbol="V"/>
 
 
                     <TextBlock Text="V Offset:" Grid.Row="1" Grid.Column="0"
                                VerticalAlignment="Center" Margin="0,5,10,0"/>
                     <local:UnitNumericUpDown Grid.Row="1" Grid.Column="1" Width="300" HorizontalAlignment="Left" Margin="0,5,0,0"
-                      IncrementType="Step" Step="{Binding Scale}"
-                      BaseValue="{Binding VoltageOffset}" UnitSymbol="V"/>
+                                             IncrementType="Step" Step="{Binding Scale}"
+                                             BaseValue="{Binding VoltageOffset}" UnitSymbol="V"/>
 
 
                   </Grid>

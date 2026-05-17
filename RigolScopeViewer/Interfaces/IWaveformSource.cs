@@ -18,6 +18,10 @@ public interface IWaveformSource : IDisposable
 
     event EventHandler? DataReady;
 
+    // Якщо плагін має свій UI (кнопки), він повертає свій ViewModel. 
+    // Якщо ні (як CSV) - повертає null.
+    object? ControlPanelViewModel { get; }
+
     //TODO: add TimeRange and VoltageRange
 
 

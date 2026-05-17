@@ -22,6 +22,8 @@ public class RigolBinSource : IWaveformSource
     public event EventHandler? DataReady;
     public int ChannelCount => _channelData?.Length ?? 0;
 
+    public object? ControlPanelViewModel => null;
+
     public RigolBinSource(string filePath, ILogger<RigolBinSource>? logger = null)
     {
         _filePath = filePath;

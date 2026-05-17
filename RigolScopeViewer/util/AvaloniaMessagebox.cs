@@ -10,7 +10,6 @@ namespace RigolScopeViewer.Util;
 
 public class AvaloniaMessageBox : IAlertModal
 {
-
     public async void Show(string title, string message)
     {
         var appLifetime = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;

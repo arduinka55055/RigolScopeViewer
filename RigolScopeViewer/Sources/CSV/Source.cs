@@ -26,6 +26,8 @@ public class CsvWaveformSource : IWaveformSource
 
     public static bool SetupNeeded => true;
 
+    public object? ControlPanelViewModel => null;
+
     public CsvWaveformSource(string filePath, IConfigManager configManager, ILogger<CsvWaveformSource>? logger = null)
     {
         _filePath = filePath;

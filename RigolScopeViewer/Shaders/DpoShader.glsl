@@ -31,7 +31,7 @@ half4 main(vec2 fragCoord) {
     bool emptyLeft = dataLeft.g > dataLeft.b;
     bool emptyRight = dataRight.g > dataRight.b;
 
-    if(emptyLeft && emptyRight) {
+    if(emptyLeft && emptyRight || dataRight.a == 0.0 && dataLeft.a == 0.0) {
         return half4(0.0);
     }
 
