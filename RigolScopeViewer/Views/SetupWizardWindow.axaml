@@ -1,0 +1,69 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:RigolScopeViewer.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="RigolScopeViewer.Views.SetupWizardWindow"
+        x:DataType="vm:SetupWizardViewModel"
+        Title="Setup Wizard" Width="800" Height="500"
+        WindowStartupLocation="CenterOwner">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- Current File Path Segment -->
+        <Border Grid.Row="0" BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="15">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Current File/Source:" FontWeight="Bold" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding CurrentFilePath}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Main Content Area: Inspector and Preview -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,2*">
+            <!-- Inspector Segment -->
+            <Border Grid.Column="0" BorderBrush="#333333" BorderThickness="0,0,1,0" Padding="15">
+                <ScrollViewer>
+                    <ItemsControl ItemsSource="{Binding Properties}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,15">
+                                    <TextBlock Grid.Column="0" Text="{Binding Name}" VerticalAlignment="Center" Width="120" Margin="0,0,10,0"/>
+                                    
+                                    <!-- Enum Editor -->
+                                    <ComboBox Grid.Column="1" ItemsSource="{Binding EnumValues}" SelectedItem="{Binding Value}" IsVisible="{Binding IsEnum}" HorizontalAlignment="Stretch"/>
+                                    
+                                    <!-- Bool Editor -->
+                                    <CheckBox Grid.Column="1" IsChecked="{Binding Value}" IsVisible="{Binding IsBool}" VerticalAlignment="Center"/>
+                                    
+                                    <!-- Number Editor -->
+                                    <TextBox Grid.Column="1" Text="{Binding Value}" IsVisible="{Binding IsNumber}" HorizontalAlignment="Stretch"/>
+                                    
+                                    <!-- String Editor -->
+                                    <TextBox Grid.Column="1" Text="{Binding Value}" IsVisible="{Binding IsString}" HorizontalAlignment="Stretch"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Preview Segment -->
+            <Border Grid.Column="1" Padding="15">
+                <Grid>
+                    <TextBlock Text="Preview Area" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="Gray" FontSize="18"/>
+                    <!-- Allow waveform sources to dynamically add to this area later -->
+                    <ContentControl Content="{Binding PreviewContent}" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Buttons Segment -->
+        <Border Grid.Row="2" BorderBrush="#333333" BorderThickness="0,1,0,0" Padding="15">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                <Button Content="Test" Click="TestButton_Click" Width="80" HorizontalContentAlignment="Center"/>
+                <Button Content="Cancel" Click="CancelButton_Click" Width="80" HorizontalContentAlignment="Center"/>
+                <Button Content="OK" Click="OkButton_Click" Width="80" HorizontalContentAlignment="Center" Classes="accent"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

@@ -10,194 +10,324 @@ using Avalonia.Media;
 using System.IO;
 using System.Linq;
 using System.Windows.Input;
+using RigolScopeViewer.Sources.CSV;
+using RigolScopeViewer.Sources;
+using RigolScopeViewer.Interfaces;
+using Microsoft.Extensions.Logging;
+using CommunityToolkit.Mvvm.ComponentModel;
+using System.Threading.Tasks;
 
 namespace RigolScopeViewer.ViewModels;
 
 
-public class MainViewModel : ViewModelBase
+public partial class MainViewModel : ViewModelBase
 {
-    private List<Waveform> _waveforms = new();
+    [ObservableProperty]
     private double _timePerDivision = 0.001; // 1ms/div
-    private double _timeOffset;
-    private double _triggerLevel;
-    private bool _showTrigger = true;
-    private double _cursorX1;
-    private double _cursorX2;
-    private double _cursorY1;
-    private double _cursorY2;
 
-    public ObservableCollection<ChannelViewModel> Channels { get; } = new();
+    [ObservableProperty]
+    private double _timeOffset;
+
+    [ObservableProperty]
+    private double _triggerLevel;
+
+    [ObservableProperty]
+    private bool _showTrigger = true;
+
+    [ObservableProperty]
+    private int _screenWidthPx = 800; // Default fallback width
+
+    private readonly ILogger<MainViewModel> _logger;
+    private readonly IConfigManager _configManager;
+    private readonly ILoggerFactory _loggerFactory;
+
+    private readonly IOscilloscopePipeline _pipeline;
+    private IWaveformSource? _currentLoader;
+    private System.Threading.CancellationTokenSource? _renderCts;
+
+    [ObservableProperty]
+    private bool _isBusy; // Прив'яжи це до <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+
+    [ObservableProperty]
+    private RenderFrame? _currentFrame; // Дані для нашого рендера
+
+    [ObservableProperty]
+    private IWaveformSource? _waveformSource;
+
+    private readonly IEnumerable<IWaveformSourceFactory> _sourceFactories;
+
+    public ObservableCollection<ChannelViewModel> Channels { get; } = [];
     public ICommand OpenCommand { get; }
+    public ICommand CaptureCommand { get; }
     public ICommand ZoomInCommand { get; }
     public ICommand ZoomOutCommand { get; }
 
-    public double TimePerDivision
+    private bool _isUpdatingViewport = false;
+
+    partial void OnTimePerDivisionChanged(double value)
     {
-        get => _timePerDivision;
-        set
-        {
-            if (value > 0)
-            {
-                _timePerDivision = value;
-                OnPropertyChanged();
-                UpdateWaveforms();
-            }
-        }
+        if (!_isUpdatingViewport) _ = RequestNewFrameAsync();
     }
 
-    public double TimeOffset
+    partial void OnTimeOffsetChanged(double value)
     {
-        get => _timeOffset;
-        set
-        {
-            _timeOffset = value;
-            OnPropertyChanged();
-            UpdateWaveforms();
-        }
+        if (!_isUpdatingViewport) _ = RequestNewFrameAsync();
     }
 
-    public double TriggerLevel
+    private Color GetChannelColor(int index)
     {
-        get => _triggerLevel;
-        set
-        {
-            _triggerLevel = value;
-            OnPropertyChanged();
-            UpdateWaveforms();
-        }
+        var colors = new[] { Colors.Yellow, Colors.Cyan, Colors.Magenta, Colors.Lime };
+        return colors[index % colors.Length];
     }
 
-    public bool ShowTrigger
+    /// <summary>
+    /// Constructor for dependency injection.
+    /// Parameters can be null for backward compatibility/testing.
+    /// </summary>
+    public MainViewModel(
+        ILogger<MainViewModel> logger,
+        IConfigManager configManager,
+        ILoggerFactory loggerFactory,
+        IOscilloscopePipeline pipeline,
+        IEnumerable<IWaveformSourceFactory> sourceFactories)
     {
-        get => _showTrigger;
-        set
-        {
-            _showTrigger = value;
-            OnPropertyChanged();
-            UpdateWaveforms();
-        }
-    }
+        _logger = logger;
+        _configManager = configManager;
+        _pipeline = pipeline;
+        _loggerFactory = loggerFactory;
+        _sourceFactories = sourceFactories;
 
-    public double CursorX1
-    {
-        get => _cursorX1;
-        set
-        {
-            _cursorX1 = value;
-            OnPropertyChanged();
-            UpdateWaveforms();
-        }
-    }
+        _logger.LogInformation("MainViewModel initialized");
 
-    public double CursorX2
-    {
-        get => _cursorX2;
-        set
-        {
-            _cursorX2 = value;
-            OnPropertyChanged();
-            UpdateWaveforms();
-        }
-    }
-
-    public double CursorY1
-    {
-        get => _cursorY1;
-        set
-        {
-            _cursorY1 = value;
-            OnPropertyChanged();
-            UpdateWaveforms();
-        }
-    }
-
-    public double CursorY2
-    {
-        get => _cursorY2;
-        set
-        {
-            _cursorY2 = value;
-            OnPropertyChanged();
-            UpdateWaveforms();
-        }
-    }
-
-    public MainViewModel()
-    {
         OpenCommand = new RelayCommand(OpenFile);
+        CaptureCommand = new RelayCommand(Capture);
         ZoomInCommand = new RelayCommand(() => TimePerDivision *= 0.8);
         ZoomOutCommand = new RelayCommand(() => TimePerDivision *= 1.25);
 
-        // Demo data for testing
-        _waveforms.Add(CreateSineWave("CH1", 1, 1000, 0, Colors.Yellow));
-        _waveforms.Add(CreateSineWave("CH2", 0.5, 500, 0.5, Colors.Cyan));
-        InitializeChannels();
     }
 
-    private void InitializeChannels()
+    // Команда, яку викликає GPUScopeControl при відпусканні миші або скролі
+    [RelayCommand]
+    private void ChangeViewport(ViewportChangeParams args)
     {
-        Channels.Clear();
-        foreach (var waveform in _waveforms)
+        _isUpdatingViewport = true;
+        try
         {
-            Channels.Add(new ChannelViewModel(waveform, UpdateWaveforms));
+            // 1. СПОЧАТКУ застосовуємо зум
+            if (args.ZoomFactor != 1.0)
+            {
+                TimePerDivision *= args.ZoomFactor;
+
+                // Захист від нескінченного зуму
+                if (TimePerDivision > 10000.0) TimePerDivision = 10000.0;
+                if (TimePerDivision < 1e-9) TimePerDivision = 1e-9;
+            }
+
+            // 2. ПОТІМ рахуємо зміщення (використовуючи ВЖЕ НОВИЙ час екрану)
+            if (args.PanPercent != 0.0)
+            {
+                // 10 клітинок екрану
+                double totalScreenTime = TimePerDivision * 10.0;
+                TimeOffset += totalScreenTime * args.PanPercent;
+
+                // Захист. Краще залишити його дуже широким, 
+                // щоб DpoBinningEngine міг спокійно малювати порожнечу за краями файлу.
+                if (TimeOffset > 100000.0) TimeOffset = 100000.0;
+                if (TimeOffset < -100000.0) TimeOffset = -100000.0;
+            }
+
+            if (args.ScreenWidthPx > 0)
+            {
+                ScreenWidthPx = args.ScreenWidthPx;
+            }
         }
-        UpdateWaveforms();
+        finally
+        {
+            _isUpdatingViewport = false;
+        }
+
+        _ = RequestNewFrameAsync();
     }
 
-    private void UpdateWaveforms()
-    {
-        // Notify UI to redraw
-        OnPropertyChanged(nameof(Waveforms));
-    }
-
-    public List<Waveform> Waveforms => _waveforms;
 
     private async void OpenFile()
     {
-        var dlg = new OpenFileDialog();
-        dlg.Filters.Add(new FileDialogFilter
+        _logger?.LogInformation("OpenFile dialog initiated");
+
+        var appLifetime = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+        var mainWindow = appLifetime?.MainWindow;
+        if (mainWindow == null) return;
+
+        var fileFactories = _sourceFactories.Where(f => !f.IsCaptureSource).ToList();
+        var extensions = fileFactories.SelectMany(f => f.SupportedExtensions).Select(e => e.TrimStart('.')).ToList();
+
+        var storageProvider = mainWindow.StorageProvider;
+        var result = await storageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
         {
-            Name = "Waveform Files",
-            Extensions = { "bin", "csv" }
+            Title = "Open Waveform File",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new Avalonia.Platform.Storage.FilePickerFileType("Waveform Files")
+                {
+                    Patterns = extensions.Select(e => "*." + e).ToList()
+                }
+            }
         });
 
-        var result = await dlg.ShowAsync(new Window());
-        if (result != null && result.Length > 0)
+        if (result != null && result.Count > 0)
         {
-            string fileName = result[0];
-            IWaveformLoader loader = Path.GetExtension(fileName).ToLower() switch
-            {
-                ".bin" => new RigolBinLoader(),
-                ".csv" => new CsvLoader(),
-                _ => throw new NotSupportedException("Unsupported file format")
-            };
+            var file = result[0];
+            var fileName = file.Path.LocalPath;
+            var ext = Path.GetExtension(fileName).ToLower();
+            _logger?.LogInformation("File selected: {FileName}", fileName);
 
-            _waveforms = loader.Load(fileName);
-            InitializeChannels();
+            try
+            {
+                var factory = fileFactories.FirstOrDefault(f => f.SupportedExtensions.Contains(ext));
+                if (factory == null) throw new NotSupportedException("Unsupported file format");
+
+                _currentLoader?.Dispose();
+                _currentLoader = factory.CreateSource(fileName);
+                WaveformSource = _currentLoader;
+
+                _logger?.LogDebug("Created waveform loader for file: {FileName}", fileName);
+
+                await _currentLoader.RunSetupAsync();
+                _logger?.LogInformation("Loaded {ChannelCount} waveforms", _currentLoader.ChannelCount);
+
+                Channels.Clear();
+                for (int i = 0; i < _currentLoader.ChannelCount; i++)
+                {
+                    var meta = _currentLoader.GetMetadata(i);
+                    var chVM = new ChannelViewModel(i, meta.ChannelName);
+                    chVM.ChannelColor = GetChannelColor(i);
+                    Channels.Add(chVM);
+                }
+
+                await RequestNewFrameAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error loading waveform file: {FileName}", fileName);
+                // We should probably show a message box here, but throw for now
+                throw;
+            }
+        }
+        else
+        {
+            _logger?.LogDebug("File open dialog cancelled");
         }
     }
 
-    private Waveform CreateSineWave(string name, double amplitude, double frequency,
-                                   double phase, Color color)
+    private async void Capture()
     {
-        int points = 1000;
-        double[] timeData = new double[points];
-        double[] analogData = new double[points];
+        _logger?.LogInformation("Capture initiated");
 
-        for (int i = 0; i < points; i++)
+        var captureFactories = _sourceFactories.Where(f => f.IsCaptureSource).ToList();
+        if (!captureFactories.Any())
         {
-            double t = i / (double)points * 0.01; // 10ms time window
-            timeData[i] = t;
-            analogData[i] = amplitude * Math.Sin(2 * Math.PI * frequency * t + phase);
+            _logger?.LogWarning("No capture sources available");
+            return;
         }
 
-        return new Waveform
+        // For now just pick the first one, or we can prompt later.
+        var factory = captureFactories.First();
+
+        try
         {
-            Name = name,
-            Type = WaveformType.Analog,
-            TimeData = timeData,
-            AnalogData = analogData,
-            Color = color
-        };
+            _currentLoader?.Dispose();
+            _currentLoader = factory.CreateSource("VISA_STUB_CONNECTION");
+            WaveformSource = _currentLoader;
+            await _currentLoader.RunSetupAsync();
+            _logger?.LogInformation("Loaded {ChannelCount} waveforms from capture source", _currentLoader.ChannelCount);
+
+            Channels.Clear();
+            for (int i = 0; i < _currentLoader.ChannelCount; i++)
+            {
+                var meta = _currentLoader.GetMetadata(i);
+                var chVM = new ChannelViewModel(i, meta.ChannelName);
+                chVM.ChannelColor = GetChannelColor(i);
+                Channels.Add(chVM);
+            }
+
+            await RequestNewFrameAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Error starting capture");
+        }
+    }
+
+
+
+    private async Task RequestNewFrameAsync()
+    {
+        if (_currentLoader == null) return;
+
+        _renderCts?.Cancel();
+        _renderCts = new System.Threading.CancellationTokenSource();
+        var token = _renderCts.Token;
+
+        IsBusy = true; // Показуємо загрузку
+
+        // Створюємо Viewport на основі твоїх налаштувань UI
+        var offset2 = TimeOffset + (TimePerDivision * -5);
+        var timeEnd = offset2 + (TimePerDivision * 10); // Наприклад, 10 клітинок на екрані
+        var viewport = new ViewportState(
+            Time: new TimeRange(offset2, timeEnd),
+            Voltage: new VoltageRange(-5f, 5f), // Це можна брати з налаштувань каналу
+            Pan: new ViewportPan(0, 0), // Pan is handled by GPU control now
+            Zoom: new ViewportZoom(1.0, 1.0), // Zoom is handled by GPU control now
+            ScreenWidthPx: ScreenWidthPx // Це можна брати з ActualWidth контрола
+        );
+
+        // ВАЖЛИВО: Span не може перетинати потоки. Тому ми запускаємо Task.Run,
+        // всередині якого викликаємо лоадер. Лоадер дає Span, ми віддаємо його в пайплайн,
+        // і результат (RenderFrame) повертаємо в UI потік. ZERO COPY!
+
+        try
+        {
+            var newFrames = await Task.Run(() =>
+            {
+                var results = new RenderFrame?[Channels.Count];
+                for (int i = 0; i < Channels.Count; i++)
+                {
+                    token.ThrowIfCancellationRequested();
+
+                    if (!Channels[i].IsVisible) continue;
+
+                    RenderFrame? result = null;
+                    _currentLoader.ProcessChannelData(Channels[i].Index, viewport.Time, (span, in metadata, ct) =>
+                    {
+                        result = _pipeline.ProcessFrame(span, metadata, viewport, ct);
+                    }, token);
+                    results[i] = result;
+                }
+                return results;
+            }, token);
+
+            // Prevent race condition: If a new viewport change occurred while Task.Run was finishing,
+            // we MUST discard this stale frame to avoid resetting the visual pan/zoom prematurely!
+            token.ThrowIfCancellationRequested();
+
+            for (int i = 0; i < Channels.Count; i++)
+            {
+                Channels[i].CurrentFrame?.Dispose();
+                Channels[i].CurrentFrame = newFrames[i];
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _logger?.LogDebug("Frame rendering cancelled due to new viewport request.");
+        }
+        finally
+        {
+            // Only set IsBusy = false if this is still the active token (not overridden by a newer request)
+            if (!token.IsCancellationRequested)
+            {
+                IsBusy = false; // Вимикаємо загрузку
+            }
+        }
     }
 }

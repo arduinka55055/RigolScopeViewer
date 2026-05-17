@@ -1,61 +1,38 @@
-﻿using RigolScopeViewer.Models;
-using System;
+﻿using Avalonia.Media;
+using CommunityToolkit.Mvvm.ComponentModel;
+using RigolScopeViewer.Models;
+using RigolScopeViewer.Services;
 
 namespace RigolScopeViewer.ViewModels;
 
-public class ChannelViewModel : ViewModelBase
+public partial class ChannelViewModel : ViewModelBase
 {
-    private readonly Waveform _waveform;
-    private readonly Action _updateCallback;
+    public int Index { get; }
 
-    public string Name => _waveform.Name;
-    public bool IsVisible
-    {
-        get => _waveform.IsVisible;
-        set
-        {
-            _waveform.IsVisible = value;
-            _updateCallback?.Invoke();
-            OnPropertyChanged();
-        }
-    }
+    [ObservableProperty]
+    private string _name;
 
-    public double Scale
-    {
-        get => _waveform.Scale;
-        set
-        {
-            _waveform.Scale = value;
-            _updateCallback?.Invoke();
-            OnPropertyChanged();
-        }
-    }
+    [ObservableProperty]
+    private bool _isVisible = true;
 
-    public double VoltageOffset
-    {
-        get => _waveform.VoltageOffset;
-        set
-        {
-            _waveform.VoltageOffset = value;
-            _updateCallback?.Invoke();
-            OnPropertyChanged();
-        }
-    }
+    [ObservableProperty]
+    private bool _isActive = false;
 
-    public double TimeOffset
-    {
-        get => _waveform.TimeOffset;
-        set
-        {
-            _waveform.TimeOffset = value;
-            _updateCallback?.Invoke();
-            OnPropertyChanged();
-        }
-    }
+    [ObservableProperty]
+    private float _scale = 1.0f; // Volts per division
 
-    public ChannelViewModel(Waveform waveform, Action updateCallback)
+    [ObservableProperty]
+    private float _voltageOffset = 0.0f;
+
+    [ObservableProperty]
+    private Color _channelColor = Colors.Yellow;
+
+    [ObservableProperty]
+    private RenderFrame? _currentFrame;
+
+    public ChannelViewModel(int index, string name)
     {
-        _waveform = waveform;
-        _updateCallback = updateCallback;
+        Index = index;
+        _name = name;
     }
 }

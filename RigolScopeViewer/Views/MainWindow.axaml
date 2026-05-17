@@ -19,6 +19,7 @@
     <Menu DockPanel.Dock="Top">
       <MenuItem Header="File">
         <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
+        <MenuItem Header="Capture (VISA)" Command="{Binding CaptureCommand}"/>
         <Separator />
         <MenuItem Header="Exit"/>
       </MenuItem>
@@ -31,6 +32,7 @@
     <!-- Toolbar -->
     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Height="40" Background="#333">
       <Button Content="Open" Command="{Binding OpenCommand}" Margin="5"/>
+      <Button Content="Capture" Command="{Binding CaptureCommand}" Margin="5"/>
       <Separator Margin="5,0" Background="#666" Width="1"/>
       <TextBlock Text="Time/div:" VerticalAlignment="Center" Margin="5,0,0,0" Foreground="White"/>
       <local:UnitNumericUpDown VerticalAlignment="Center" Margin="15,0,0,0" Foreground="White"
@@ -65,6 +67,8 @@
       <TextBlock Text=" | " VerticalAlignment="Center" Foreground="White"/>
       <TextBlock Text="{Binding TimeOffset, StringFormat='Offset: {0:F6} s'}"
                  VerticalAlignment="Center" Foreground="White"/>
+
+      <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
     </StackPanel>
     
     <!-- Main Content -->
@@ -77,14 +81,22 @@
       <!-- Oscilloscope Display -->
       <local:OscilloscopeControl x:Name="OscilloscopeView"
                                  Grid.Column="0"
-                                 Background="LightBlue" />
+                                 Background="#111" />
 
       <!-- Channel Controls -->
       <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Background="#444">
         <ItemsControl ItemsSource="{Binding Channels}">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border BorderBrush="#404040" BorderThickness="0,0,0,1" Padding="10,5">
+              <Border Classes.active="{Binding IsActive}" BorderThickness="2" Padding="10,5" Background="Transparent" PointerPressed="Channel_PointerPressed">
+                <Border.Styles>
+                  <Style Selector="Border">
+                    <Setter Property="BorderBrush" Value="#404040"/>
+                  </Style>
+                  <Style Selector="Border.active">
+                    <Setter Property="BorderBrush" Value="#007ACC"/>
+                  </Style>
+                </Border.Styles>
                 <StackPanel>
                   <CheckBox Content="{Binding Name}" IsChecked="{Binding IsVisible}"/>
 
@@ -111,11 +123,7 @@
                       IncrementType="Step" Step="{Binding Scale}"
                       BaseValue="{Binding VoltageOffset}" UnitSymbol="V"/>
 
-                    <TextBlock Text="T Offset:" Grid.Row="2" Grid.Column="0"
-                               VerticalAlignment="Center" Margin="0,5,10,0"/>
-                    <local:UnitNumericUpDown Grid.Row="2" Grid.Column="1" Width="300" HorizontalAlignment="Left" Margin="0,5,0,0"
-                      IncrementType="Step" Step="0.001"
-                      BaseValue="{Binding TimeOffset}" UnitSymbol="s"/>
+
                   </Grid>
                 </StackPanel>
               </Border>

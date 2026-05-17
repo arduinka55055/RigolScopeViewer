@@ -2,13 +2,26 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:skia="clr-namespace:Avalonia.Skia;assembly=Avalonia.Skia"
+             xmlns:local="clr-namespace:RigolScopeViewer" 
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="RigolScopeViewer.OscilloscopeControl"
-             VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
-             >
+             VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+    
     <Grid>
-        <Image Name="WaveformImage" Stretch="Fill" />
-        <Canvas Name="OverlayCanvas" IsHitTestVisible="False" />
+        <!-- Магія тут: Прив'язуємо Дані та Команду -->
+        <local:GPUScopeControl 
+            HorizontalAlignment="Stretch" 
+            VerticalAlignment="Stretch" 
+            Channels="{Binding Channels}"
+            UpdateViewportCommand="{Binding ChangeViewportCommand}" />
+            
+        <local:ScopeGridControl 
+            HorizontalAlignment="Stretch" 
+            VerticalAlignment="Stretch"
+            TimePerDivision="{Binding TimePerDivision}"
+            TimeOffset="{Binding TimeOffset}"
+            Channels="{Binding Channels}"
+            IsHitTestVisible="False" />
     </Grid>
+    
 </UserControl>
