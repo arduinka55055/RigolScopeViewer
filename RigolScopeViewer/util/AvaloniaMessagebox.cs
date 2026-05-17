@@ -1,14 +1,21 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using CommunityToolkit.Mvvm.Input;
+using RigolScopeViewer;
+using RigolScopeViewer.Interfaces;
 
+namespace RigolScopeViewer.Util;
 
-public static class AvaloniaMessageBox
+public class AvaloniaMessageBox : IAlertModal
 {
-    public static void ShowCustomMessageBox(string title, string message)
+
+    public async void Show(string title, string message)
     {
+        var appLifetime = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+        var mainWindow = appLifetime?.MainWindow;
+
         var msgBox = new Window
         {
             Title = title,
@@ -32,6 +39,13 @@ public static class AvaloniaMessageBox
             }
         };
 
-        msgBox.Show();
+        if (mainWindow != null)
+        {
+            await msgBox.ShowDialog(mainWindow);
+        }
+        else
+        {
+            msgBox.Show();
+        }
     }
 }

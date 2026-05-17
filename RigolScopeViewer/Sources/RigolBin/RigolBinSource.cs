@@ -8,7 +8,7 @@ using RigolScopeViewer.Interfaces;
 using RigolScopeViewer.Models;
 using Microsoft.Extensions.Logging;
 
-namespace RigolScopeViewer.Sources;
+namespace RigolScopeViewer.Sources.RigolBin;
 
 public class RigolBinSource : IWaveformSource
 {

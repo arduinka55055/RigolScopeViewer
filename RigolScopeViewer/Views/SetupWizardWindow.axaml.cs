@@ -1,3 +1,4 @@
+﻿using System.Windows.Input;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 
@@ -5,6 +6,10 @@ namespace RigolScopeViewer.Views;
 
 public partial class SetupWizardWindow : Window
 {
+    // bindable Test command
+    public ICommand? TestCommand;
+
+
     public SetupWizardWindow()
     {
         InitializeComponent();
@@ -22,6 +27,9 @@ public partial class SetupWizardWindow : Window
 
     private void TestButton_Click(object? sender, RoutedEventArgs e)
     {
-        // Add test logic later or bind to ViewModel command
+        if (TestCommand != null && TestCommand.CanExecute(null))
+        {
+            TestCommand.Execute(null);
+        }
     }
 }

@@ -5,6 +5,7 @@ using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
 using Microsoft.Extensions.Logging;
 using RigolScopeViewer;
+using RigolScopeViewer.Interfaces;
 using RigolScopeViewer.Models;
 using RigolScopeViewer.Services;
 using RigolScopeViewer.Services.Samplers;
@@ -46,12 +47,14 @@ public class DpoDrawOperation : ICustomDrawOperation
     private readonly RenderFrame _frame;
 
     private readonly ILogger<DpoDrawOperation> _logger;
+    private readonly IAlertModal _alertModal;
 
-    public DpoDrawOperation(ILogger<DpoDrawOperation> logger, Rect bounds, RenderFrame frame, ViewportPan pan, ViewportZoom zoom, VoltageRange voltage, float intensity, Color color)
+    public DpoDrawOperation(ILogger<DpoDrawOperation> logger, IAlertModal alertModal, Rect bounds, RenderFrame frame, ViewportPan pan, ViewportZoom zoom, VoltageRange voltage, float intensity, Color color)
     {
         Bounds = bounds;
         _frame = frame;
         _logger = logger;
+        _alertModal = alertModal;
         Pan = pan;
         Zoom = zoom;
         Voltage = voltage;
@@ -64,7 +67,7 @@ public class DpoDrawOperation : ICustomDrawOperation
             if (!ErrorShown)
             {
                 ErrorShown = true;
-                AvaloniaMessageBox.ShowCustomMessageBox("Shader Compilation Error", $"Failed to create shader:\n{DpoDrawOperation.ShaderCreationErrors}");
+                _alertModal.Show("Shader Compilation Error", $"Failed to create shader:\n{DpoDrawOperation.ShaderCreationErrors}");
                 Console.WriteLine($"Shader errors: {DpoDrawOperation.ShaderCreationErrors}");
             }
         }

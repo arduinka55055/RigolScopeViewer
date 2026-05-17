@@ -9,6 +9,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using RigolScopeViewer.Interfaces;
 using RigolScopeViewer.Services;
 using RigolScopeViewer.ViewModels;
 
@@ -141,10 +142,12 @@ public class GPUScopeControl : Control
     }
 
     private readonly ILogger<DpoDrawOperation> _drawLogger;
+    private readonly IAlertModal _alertModal;
 
     public GPUScopeControl()
     {
         _drawLogger = App.Services!.GetRequiredService<ILogger<DpoDrawOperation>>();
+        _alertModal = App.Services!.GetRequiredService<IAlertModal>();
     }
 
     public override void Render(DrawingContext context)
@@ -163,6 +166,7 @@ public class GPUScopeControl : Control
 
             context.Custom(new DpoDrawOperation(
                 _drawLogger,
+                _alertModal,
                 bounds,
                 channel.CurrentFrame,
                 _pan,

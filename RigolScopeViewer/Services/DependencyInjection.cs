@@ -3,10 +3,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RigolScopeViewer.Interfaces;
 using RigolScopeViewer.Services.Samplers;
-using RigolScopeViewer.Sources;
+using RigolScopeViewer.Sources.RigolBin;
 using RigolScopeViewer.Sources.CSV;
 using RigolScopeViewer.Sources.VISA;
 using RigolScopeViewer.ViewModels;
+using RigolScopeViewer.Util;
 
 namespace RigolScopeViewer.Services;
 
@@ -36,6 +37,9 @@ public static class DependencyInjectionExtensions
         // Add resampling/binning engine
         services.AddSingleton<IResampler<ColumnStats>, DpoBinningEnginePLINQ>();
         //services.AddSingleton<IResampler<ColumnStats>, DpoBinningEngine>();
+
+        // Alert modal service
+        services.AddTransient<IAlertModal, AvaloniaMessageBox>();
 
         // Реєструємо пайплайн
         services.AddTransient<IOscilloscopePipeline, OscilloscopePipeline>();

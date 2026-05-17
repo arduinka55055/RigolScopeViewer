@@ -1,8 +1,8 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using RigolScopeViewer.Interfaces;
 using System;
 
-namespace RigolScopeViewer.Sources;
+namespace RigolScopeViewer.Sources.RigolBin;
 
 public class RigolBinSourceFactory : IWaveformSourceFactory
 {
