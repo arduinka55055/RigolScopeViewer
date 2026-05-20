@@ -22,9 +22,6 @@ public interface IWaveformSource : IDisposable
     // Якщо ні (як CSV) - повертає null.
     object? ControlPanelViewModel { get; }
 
-    //TODO: add TimeRange and VoltageRange
-
-
     // Запитуємо дані ДЛЯ КОНКРЕТНОГО КАНАЛУ
     void ProcessChannelData(int channelIndex, TimeRange timeRange, DataProcessor processor, CancellationToken cancellationToken = default);
     void Start();

@@ -22,7 +22,7 @@
         <MenuItem Header="Open" Command="{Binding OpenCommand}"/>
         <MenuItem Header="Capture (VISA)" Command="{Binding CaptureCommand}"/>
         <Separator />
-        <MenuItem Header="Exit"/>
+        <MenuItem Header="Exit" Command="{Binding ExitCommand}"/>
       </MenuItem>
       <MenuItem Header="View">
         <MenuItem Header="Zoom In" Command="{Binding ZoomInCommand}"/>

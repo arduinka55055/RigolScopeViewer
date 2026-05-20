@@ -179,6 +179,12 @@ public class VisaWaveformSource : IWaveformSource
         var tempChannels = new List<float[]>();
         var tempMetadata = new List<WaveformMetadata>();
 
+        var timeScaleStr = await client.QueryStringAsync(":TIMebase:MAIN:SCALe?", ct);
+        var timeOffsetStr = await client.QueryStringAsync(":TIMebase:MAIN:OFFSet?", ct);
+        
+        float.TryParse(timeScaleStr, System.Globalization.CultureInfo.InvariantCulture, out var timeScale);
+        float.TryParse(timeOffsetStr, System.Globalization.CultureInfo.InvariantCulture, out var timeOffset);
+
         for (var ch = 1; ch <= 4; ch++)
         {
             ct.ThrowIfCancellationRequested();
@@ -189,6 +195,14 @@ public class VisaWaveformSource : IWaveformSource
             await client.WriteAsync($":WAVeform:SOURce CHANnel{ch}", ct);
             await client.WriteAsync(":WAVeform:FORMat BYTE", ct);
             await client.WriteAsync(":WAVeform:MODE NORMal", ct);
+
+            var vScaleStr = await client.QueryStringAsync($":CHANnel{ch}:SCALe?", ct);
+            var vOffsetStr = await client.QueryStringAsync($":CHANnel{ch}:OFFSet?", ct);
+            var probeStr = await client.QueryStringAsync($":CHANnel{ch}:PROBe?", ct);
+
+            float.TryParse(vScaleStr, System.Globalization.CultureInfo.InvariantCulture, out var vScale);
+            float.TryParse(vOffsetStr, System.Globalization.CultureInfo.InvariantCulture, out var vOffset);
+            float.TryParse(probeStr, System.Globalization.CultureInfo.InvariantCulture, out var probe);
 
             var preambleStr = await client.QueryStringAsync(":WAVeform:PREamble?", ct);
             var vals = preambleStr.Split(',');
@@ -216,7 +230,12 @@ public class VisaWaveformSource : IWaveformSource
                 ChannelName = $"CH{ch}",
                 SampleInterval = xincrement,
                 StartTime = xorigin - (xreference * xincrement),
-                TotalPoints = voltage.Length
+                TotalPoints = voltage.Length,
+                TimeScale = timeScale,
+                TimeOffset = timeOffset,
+                VoltageScale = vScale,
+                VoltageOffset = vOffset,
+                ProbeAttenuation = probe
             });
         }
 

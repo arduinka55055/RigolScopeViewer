@@ -56,6 +56,12 @@ public partial class MainViewModel : ViewModelBase
     public ObservableCollection<ChannelViewModel> Channels { get; } = [];
     public ICommand OpenCommand { get; }
     public ICommand CaptureCommand { get; }
+    public ICommand ExitCommand { get; } = new RelayCommand(() =>
+    {
+        var appLifetime = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+        appLifetime?.Shutdown();
+    });
+
     public ICommand ZoomInCommand { get; }
     public ICommand ZoomOutCommand { get; }
 
@@ -223,7 +229,16 @@ public partial class MainViewModel : ViewModelBase
                     var meta = _currentLoader.GetMetadata(i);
                     var chVM = new ChannelViewModel(i, meta.ChannelName);
                     chVM.ChannelColor = GetChannelColor(i);
+                    if (meta.VoltageScale != 0) chVM.Scale = meta.VoltageScale;
+                    if (meta.VoltageOffset != 0) chVM.VoltageOffset = meta.VoltageOffset;
                     Channels.Add(chVM);
+                }
+
+                if (_currentLoader.ChannelCount > 0)
+                {
+                    var firstMeta = _currentLoader.GetMetadata(0);
+                    if (firstMeta.TimeScale != 0) TimePerDivision = firstMeta.TimeScale;
+                    if (firstMeta.TimeOffset != 0) TimeOffset = firstMeta.TimeOffset;
                 }
 
                 await RequestNewFrameAsync();
@@ -268,7 +283,16 @@ public partial class MainViewModel : ViewModelBase
                 var meta = _currentLoader.GetMetadata(i);
                 var chVM = new ChannelViewModel(i, meta.ChannelName);
                 chVM.ChannelColor = GetChannelColor(i);
+                if (meta.VoltageScale != 0) chVM.Scale = meta.VoltageScale;
+                if (meta.VoltageOffset != 0) chVM.VoltageOffset = meta.VoltageOffset;
                 Channels.Add(chVM);
+            }
+
+            if (_currentLoader.ChannelCount > 0)
+            {
+                var firstMeta = _currentLoader.GetMetadata(0);
+                if (firstMeta.TimeScale != 0) TimePerDivision = firstMeta.TimeScale;
+                if (firstMeta.TimeOffset != 0) TimeOffset = firstMeta.TimeOffset;
             }
 
             await RequestNewFrameAsync();
