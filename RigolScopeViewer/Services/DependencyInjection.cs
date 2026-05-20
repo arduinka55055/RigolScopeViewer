@@ -35,7 +35,7 @@ public static class DependencyInjectionExtensions
         services.AddSingleton<IConfigManager, ConfigManager>();
 
         // Add resampling/binning engine
-        services.AddSingleton<IResampler<ColumnStats>, DpoBinningEnginePLINQ>();
+        services.AddSingleton<IResampler<ColumnStats>, DpoBinningEngineGPU>();
         //services.AddSingleton<IResampler<ColumnStats>, DpoBinningEngine>();
 
         // Alert modal service
