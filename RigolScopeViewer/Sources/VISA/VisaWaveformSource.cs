@@ -181,7 +181,7 @@ public class VisaWaveformSource : IWaveformSource
 
         var timeScaleStr = await client.QueryStringAsync(":TIMebase:MAIN:SCALe?", ct);
         var timeOffsetStr = await client.QueryStringAsync(":TIMebase:MAIN:OFFSet?", ct);
-        
+
         float.TryParse(timeScaleStr, System.Globalization.CultureInfo.InvariantCulture, out var timeScale);
         float.TryParse(timeOffsetStr, System.Globalization.CultureInfo.InvariantCulture, out var timeOffset);
 
